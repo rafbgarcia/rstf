@@ -8,6 +8,18 @@ The framework generates TypeScript types from Go structs, handles SSR via a Bun 
 
 The CLI (`rstf init`, `rstf dev`) orchestrates codegen, bundling, and live reloading.
 
+## Design philosophy
+
+**Why Go for the server:**
+- Static typing catches errors at compile time, which is especially valuable with AI-generated code.
+- Go's small language surface and explicit style make it predictable for both LLMs and humans new to the codebase.
+- Mature, consistent tooling (go fmt, go vet, go test, gopls) with no ecosystem fragmentation.
+
+**Why SSR (via Bun sidecar):**
+- Server-side auth checks before any HTML is sent — no flash of unauthorized content, no client-side auth loading states.
+- Most business applications are read-heavy; SSR gives faster first paint with less client-side complexity.
+- The Bun sidecar runs as a separate process. This adds operational complexity but avoids CGO dependencies and gives full React/JSX compatibility.
+
 ## Specification-driven development
 
 This project uses `*-spec.md` files co-located with their modules as the source of truth.
