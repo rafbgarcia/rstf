@@ -23,3 +23,5 @@ node_modules/
 bun.lockb
 
 .claude/*local*
+
+.rstf
