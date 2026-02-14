@@ -43,11 +43,11 @@ func TestRenderWithServerData(t *testing.T) {
 		Layout:    "layout/layout",
 		ServerData: map[string]map[string]any{
 			"hello/hello": {
-				"Name":  "World",
-				"Count": 42,
+				"name":  "World",
+				"count": 42,
 			},
 			"layout/layout": {
-				"Title": "Test App",
+				"title": "Test App",
 			},
 		},
 	})
@@ -72,11 +72,11 @@ func TestRenderWithLayout(t *testing.T) {
 		Layout:    "layout/layout",
 		ServerData: map[string]map[string]any{
 			"hello/hello": {
-				"Name":  "World",
-				"Count": 1,
+				"name":  "World",
+				"count": 1,
 			},
 			"layout/layout": {
-				"Title": "My App",
+				"title": "My App",
 			},
 		},
 	})
@@ -106,7 +106,7 @@ func TestRenderMissingComponent(t *testing.T) {
 		Component: "nonexistent/component",
 		Layout:    "layout/layout",
 		ServerData: map[string]map[string]any{
-			"layout/layout": {"Title": "Test"},
+			"layout/layout": {"title": "Test"},
 		},
 	})
 	if err == nil {
@@ -124,7 +124,7 @@ func TestRenderNoViewExport(t *testing.T) {
 		Component: "broken/broken",
 		Layout:    "layout/layout",
 		ServerData: map[string]map[string]any{
-			"layout/layout": {"Title": "Test"},
+			"layout/layout": {"title": "Test"},
 		},
 	})
 	if err == nil {

@@ -12,6 +12,11 @@ type Author struct {
 	Email string `json:"email"`
 }
 
-func SSR(ctx *rstf.Context) (posts []Post, author Author) {
-	return
+type ServerData struct {
+	Posts  []Post `json:"posts"`
+	Author Author `json:"author"`
+}
+
+func SSR(ctx *rstf.Context) ServerData {
+	return ServerData{}
 }

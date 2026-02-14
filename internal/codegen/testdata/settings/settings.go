@@ -9,6 +9,11 @@ type Config struct {
 	Score    float64 `json:"score"`
 }
 
-func SSR(ctx *rstf.Context) (config Config, title string) {
-	return
+type ServerData struct {
+	Config Config `json:"config"`
+	Title  string `json:"title"`
+}
+
+func SSR(ctx *rstf.Context) ServerData {
+	return ServerData{}
 }

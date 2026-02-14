@@ -1,14 +1,15 @@
-import { Title } from "@rstf/layout/layout";
+import { serverData } from "@rstf/layout/layout";
 import type { ReactNode } from "react";
 
 export function View({ children }: { children: ReactNode }) {
+  const { title } = serverData();
   return (
     <html>
       <head>
-        <title>{Title}</title>
+        <title>{title}</title>
       </head>
       <body>
-        <header>{Title}</header>
+        <header>{title}</header>
         <main>{children}</main>
       </body>
     </html>

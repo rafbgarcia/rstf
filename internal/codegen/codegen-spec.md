@@ -25,11 +25,18 @@ type Author struct {
     Email string `json:"email"`
 }
 
-func SSR(ctx *rstf.Context) (posts []Post, author Author) {
+type ServerData struct {
+    Posts  []Post `json:"posts"`
+    Author Author `json:"author"`
+}
+
+func SSR(ctx *rstf.Context) ServerData {
     // fetch data, use ctx.Log, etc.
-    return
+    return ServerData{}
 }
 ```
+
+The `.go` file is optional — a `.tsx` file can exist without a paired `.go` file (for pages with no server data).
 
 ## What the framework generates
 
@@ -51,12 +58,34 @@ declare namespace Dashboard {
     email: string;
   }
 
-  interface SSRProps {
+  interface ServerData {
     posts: Post[];
     author: Author;
   }
 }
 ```
+
+### Generated runtime module (`.rstf/generated/dashboard.ts`)
+
+Alongside the type declarations, codegen generates a runtime module that the component imports at runtime via `@rstf/dashboard`:
+
+```typescript
+// .rstf/generated/dashboard.ts (generated — do not edit)
+let _data: Record<string, any> = {};
+
+export function serverData(): Dashboard.ServerData {
+  return {
+    posts: _data.posts ?? [],
+    author: _data.author ?? {},
+  } as Dashboard.ServerData;
+}
+
+export function __setServerData(data: Record<string, any>) {
+  _data = data;
+}
+```
+
+The `serverData()` function returns the current request's data. Components call it inside their `View` function. The `__setServerData()` function is internal — called by the Bun sidecar before each render.
 
 ### Namespace naming
 
@@ -71,10 +100,8 @@ The namespace is derived from the route directory path, PascalCased:
 ### How it works
 
 1. The framework scans the directory for `.go` files.
-2. It looks for exported functions with recognized names: `SSR`, `GET`, `POST`, `PUT`, `DELETE`.
-3. For each function, it reads the **named return parameters** to determine the prop names and types.
-   - `posts []Post` becomes `posts: Post[]`
-   - `author Author` becomes `author: Author`
+2. It looks for an exported `SSR` function.
+3. `SSR` must return a single struct type. The struct's fields become the server data shape.
 4. It resolves each referenced struct and maps Go types to TypeScript types:
    - `string` → `string`
    - `int`, `float64`, etc. → `number`
@@ -82,7 +109,7 @@ The namespace is derived from the route directory path, PascalCased:
    - Struct names are kept as-is (e.g. `Post` → `Post`)
    - Slices become arrays (e.g. `[]Post` → `Post[]`)
 5. Field names come from `json` struct tags. If no tag exists, the field name is lowercased (`Title` → `title`). Fields tagged `json:"-"` are excluded.
-6. Only structs referenced by route functions are included in the output.
+6. Only structs referenced by the `SSR` function's return type are included in the output.
 
 ### TypeScript configuration
 
@@ -98,14 +125,17 @@ This makes all namespaced types globally available. The developer never imports 
 
 ### Conventions
 
-- **Named returns are required.** `func SSR() []Post` is ignored because there's no prop name. Write `func SSR() (posts []Post)` instead.
+- **`SSR` must return a single struct.** `func SSR() string` or `func SSR() (posts []Post, author Author)` are not valid. The return type must be a named struct (e.g. `ServerData`) whose fields define the data shape.
 - **The first parameter can be `*rstf.Context`.** The framework detects this and skips it — it doesn't appear in the generated TypeScript. The import alias doesn't matter (`rstf`, `fw`, etc.).
 - **Unexported struct fields are excluded.** Only exported fields (capitalized) appear in the TypeScript output.
 
 ### How the developer uses the generated types
 
 ```tsx
-export function View({ posts, author }: Dashboard.SSRProps) {
+import { serverData } from "@rstf/dashboard";
+
+export function View() {
+  const { posts, author } = serverData();
   return (
     <div>
       <p>By {author.name}</p>
@@ -117,4 +147,4 @@ export function View({ posts, author }: Dashboard.SSRProps) {
 }
 ```
 
-The props are type-checked against what the Go function returns. If the Go code changes (e.g. a field is renamed or a new return param is added), the `.d.ts` regenerates on the next codegen run, and the TSX component will show a type error if it doesn't match.
+The `serverData()` return type matches the `ServerData` struct. If the Go code changes (e.g. a field is renamed or a new field is added), the `.d.ts` and generated module regenerate on the next codegen run, and the TSX component will show a type error if it doesn't match.

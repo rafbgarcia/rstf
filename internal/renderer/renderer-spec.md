@@ -11,12 +11,13 @@ It consists of two parts:
 
 ## Server data model
 
-Components don't receive server data as React props. Instead, each `.go` file's public functions are called on the server, and their return values are made available to the paired `.tsx` file via ES module live bindings.
+Components don't receive server data as React props. Instead, each `.go` file defines `func SSR` returning a struct. The struct is JSON-serialized and made available to the paired `.tsx` file via a `serverData()` function imported from `@rstf/{path}`.
 
-The render request carries a `serverData` map keyed by component path. Before rendering, the sidecar imports each component's generated module (at `.rstf/generated/{path}.ts`) and calls its `__setServerData()` function. Components import typed values directly from `@rstf/{path}`.
+The render request carries a `serverData` map keyed by component path. Before rendering, the sidecar imports each component's generated module (at `.rstf/generated/{path}.ts`) and calls its `__setServerData()` function. Components call `serverData()` inside their `View` function to read the current request's data.
 
 This means:
-- Server data flows through ES module live bindings (scoped per generated module)
+- Server data flows through generated modules (scoped per component path)
+- Components access data by calling `serverData()` at render time, not at import time
 - React props are used for component-to-component communication (parent → child)
 - A component can use both: server data from its `.go` file AND React props from its parent
 
@@ -35,18 +36,21 @@ Content-Type: application/json
   "layout": "main",
   "serverData": {
     "main": {
-      "Session": {"isLoggedIn": true, "user": {"name": "Rafa"}}
+      "session": {"isLoggedIn": true, "user": {"name": "Rafa"}}
     },
     "routes/dashboard": {
-      "Posts": [{"title": "Hello", "published": true}]
+      "posts": [{"title": "Hello", "published": true}],
+      "author": {"name": "Rafa", "email": "rafa@example.com"}
     },
     "shared/ui/user-avatar": {
-      "UserName": "Rafa",
-      "AvatarUrl": "/avatars/rafa.jpg"
+      "userName": "Rafa",
+      "avatarUrl": "/avatars/rafa.jpg"
     }
   }
 }
 ```
+
+The keys within each component's data come from the Go struct's `json` tags. The Go handler calls `json.Marshal` on the `SSR()` return value, so the serialization format is determined by the struct definition.
 
 Fields:
 - `component` (required) — path to the route component, relative to project root
@@ -66,7 +70,7 @@ The layout component receives the route as standard React `children`. No special
 
 ### Concurrency safety
 
-`__setServerData` mutates global module-level variables. If two requests interleave — request A sets data, request B sets data, request A renders — request A would render with B's data.
+`__setServerData` mutates a module-level `_data` variable. If two requests interleave — request A sets data, request B sets data, request A renders — request A's `serverData()` calls would return B's data.
 
 This is safe as long as there is **no `await` between `__setServerData` and `renderToString`**. Since `renderToString` is synchronous and Bun runs on a single-threaded event loop, a synchronous set-then-render block cannot be interrupted by another request.
 

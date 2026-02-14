@@ -19,26 +19,32 @@ The sidecar caches imported modules for performance. During development, the wat
 
 ## Server data mechanism
 
-Server data is the bridge between Go functions and React components. Each `.go` file's public functions are called on the server, and their return values are made available to the paired `.tsx` file as direct imports.
+Server data is the bridge between Go handlers and React components. Each `.go` file's `SSR` function returns a struct, and its JSON-serialized fields are made available to the paired `.tsx` file via a `serverData()` function.
 
 ### How it works
 
-1. Codegen reads the `.go` file and generates a `.ts` module under `.rstf/generated/` with `export let` bindings and a `__setServerData()` function.
-2. The Go handler calls each relevant `.go` file's functions, collecting return values into a `serverData` map keyed by component path.
-3. The sidecar imports each generated module and calls `__setServerData(data)` before rendering.
-4. During `renderToString` (synchronous), components read the live bindings, which reflect the current request's data.
+1. The `.go` file defines `func SSR` returning a struct. The struct's `json` tags determine the field names on the TypeScript side.
+2. The Go handler calls `SSR()`, serializes the result via `json.Marshal`, and includes it in the `serverData` map keyed by component path.
+3. Codegen generates a `.ts` module under `.rstf/generated/` that exports a `serverData()` function and an internal `__setServerData()` function.
+4. Before rendering, the sidecar imports each generated module and calls `__setServerData(data)`.
+5. During `renderToString` (synchronous), components call `serverData()` inside their `View` function to read the current request's data.
 
 ### Generated modules (codegen responsibility)
 
-For each `.go` file with public functions, codegen generates a module under `.rstf/generated/`:
+For each `.go` file with an `SSR` function, codegen generates a module under `.rstf/generated/`:
 
 ```go
 // shared/ui/user-avatar.go
-func UserName(ctx rstf.Context) string {
-    return ctx.Session().User.FirstName + " " + ctx.Session().User.LastName
+type ServerData struct {
+    UserName  string `json:"userName"`
+    AvatarUrl string `json:"avatarUrl"`
 }
-func AvatarUrl(ctx rstf.Context) string {
-    return ctx.Session().User.AvatarURL
+
+func SSR(ctx *rstf.Context) ServerData {
+    return ServerData{
+        UserName:  ctx.Session().User.FirstName + " " + ctx.Session().User.LastName,
+        AvatarUrl: ctx.Session().User.AvatarURL,
+    }
 }
 ```
 
@@ -46,47 +52,53 @@ Generates:
 
 ```typescript
 // .rstf/generated/shared/ui/user-avatar.ts (generated — do not edit)
-export let UserName: string = "";
-export let AvatarUrl: string = "";
+let _data: Record<string, any> = {};
+
+export function serverData(): { userName: string; avatarUrl: string } {
+  return {
+    userName: _data.userName ?? "",
+    avatarUrl: _data.avatarUrl ?? "",
+  };
+}
 
 export function __setServerData(data: Record<string, any>) {
-  UserName = data.UserName ?? "";
-  AvatarUrl = data.AvatarUrl ?? "";
+  _data = data;
 }
 ```
 
 A `tsconfig.json` path alias maps `@rstf/*` to `.rstf/generated/*`, so components import as:
 
 ```tsx
-import { UserName, AvatarUrl } from "@rstf/shared/ui/user-avatar";
+import { serverData } from "@rstf/shared/ui/user-avatar";
 ```
 
-### Why this works (ES module live bindings)
+### Why `serverData()` is a function
 
-ES module `export let` creates live bindings — importers hold a reference to the binding, not a copy of the value. When `__setServerData()` reassigns `UserName`, all importers see the new value on their next read.
+The generated module is cached by the Bun sidecar across requests. A function call ensures the component reads the current request's data at render time, not stale data from import time. Internally, `__setServerData()` updates the module's `_data` variable before each `renderToString` call.
 
 Since `renderToString` is synchronous, there's no concurrency. The sidecar sets data, renders, returns — one request at a time.
 
 ### Scoping
 
-Each generated module is independent. `@rstf/shared/ui/user-avatar` only contains `UserName` and `AvatarUrl`. `@rstf/routes/dashboard` only contains `Posts`. A component can only import from its own generated module — no cross-access.
+Each generated module is independent. `@rstf/shared/ui/user-avatar` only contains user avatar data. `@rstf/routes/dashboard` only contains dashboard data. A component imports `serverData` from its own generated module — no cross-access.
 
 ### Mixed data sources
 
 A component can use both server data AND React props:
 
-- **Server data** (from `.go` file): imported from `@rstf/{path}` — for auth, database queries, session info
+- **Server data** (from `.go` file): accessed via `serverData()` from `@rstf/{path}` — for auth, database queries, session info
 - **React props** (from parent component): passed as regular JSX attributes — for component-to-component communication
 
 ```tsx
 // shared/ui/user-avatar.tsx
-import { UserName, AvatarUrl } from "@rstf/shared/ui/user-avatar";
+import { serverData } from "@rstf/shared/ui/user-avatar";
 
 export function View({ notificationCount }: { notificationCount?: number }) {
+  const { userName, avatarUrl } = serverData();
   return (
     <div>
-      <img src={AvatarUrl} alt={UserName} />
-      <span>{UserName}</span>
+      <img src={avatarUrl} alt={userName} />
+      <span>{userName}</span>
       {notificationCount && <span>{notificationCount}</span>}
     </div>
   );
@@ -101,15 +113,16 @@ The layout (`main.tsx`) is mandatory. It renders `<html><head><body>` and receiv
 
 ```tsx
 // main.tsx
-import { Session } from "@rstf/main";
+import { serverData } from "@rstf/main";
 import type { ReactNode } from "react";
 
 export function View({ children }: { children: ReactNode }) {
+  const { session } = serverData();
   return (
     <html>
       <head><meta charSet="utf-8" /><title>My App</title></head>
       <body>
-        {Session.isLoggedIn ? <NavBar /> : <LoginPrompt />}
+        {session.isLoggedIn ? <NavBar /> : <LoginPrompt />}
         <main>{children}</main>
       </body>
     </html>
@@ -168,24 +181,29 @@ const _initData = _isServer
   ? {}
   : ((window as any).__RSTF_SERVER_DATA__?.["shared/ui/user-avatar"] ?? {});
 
-export let UserName: string = _initData.UserName ?? "";
-export let AvatarUrl: string = _initData.AvatarUrl ?? "";
+let _data: Record<string, any> = _initData;
+
+export function serverData(): { userName: string; avatarUrl: string } {
+  return {
+    userName: _data.userName ?? "",
+    avatarUrl: _data.avatarUrl ?? "",
+  };
+}
 
 export function __setServerData(data: Record<string, any>) {
-  UserName = data.UserName ?? "";
-  AvatarUrl = data.AvatarUrl ?? "";
+  _data = data;
 }
 ```
 
-On the server, exports start as empty strings and are set by the sidecar before rendering. On the client, exports are initialized from the serialized data embedded in the HTML.
+On the server, `_data` starts as an empty object and is set by the sidecar before rendering. On the client, `_data` is initialized from the serialized data embedded in the HTML. Either way, `serverData()` reads from `_data` at call time, returning the current request's values.
 
 ### Hydration sequence
 
 1. Browser receives HTML — page is visible immediately.
 2. Browser parses `__RSTF_SERVER_DATA__` — server data is in memory.
 3. Browser loads `bundle.js` — React + component code loads.
-4. Generated modules initialize from `__RSTF_SERVER_DATA__`.
-5. `hydrateRoot` runs — React attaches to existing DOM.
+4. Generated modules initialize `_data` from `__RSTF_SERVER_DATA__`.
+5. `hydrateRoot` runs — React attaches to existing DOM, components call `serverData()` which reads from `_data`.
 6. `useEffect`, `useState`, `onClick`, etc. become active.
 
 ### Client-only APIs during SSR
@@ -216,6 +234,40 @@ The Go server serves `.rstf/static/` so browsers can load bundles:
 ```
 GET /.rstf/static/dashboard/bundle.js -> .rstf/static/dashboard/bundle.js
 ```
+
+## Page metadata
+
+Routes can export a `meta` value to set per-page `<title>`, description, and other head tags. The layout reads it via its own `serverData()`.
+
+### Static meta (no server data needed)
+
+```tsx
+// routes/settings.tsx
+export const meta = {
+  title: "Settings",
+  description: "Manage your account settings",
+};
+```
+
+### Dynamic meta (depends on server data)
+
+Export `meta` as a function. The sidecar calls it after `__setServerData`, so `serverData()` returns current values:
+
+```tsx
+// routes/settings.tsx
+import { serverData } from "@rstf/routes/settings";
+
+export const meta = () => ({
+  title: `Editing ${serverData().userName}`,
+});
+```
+
+### How the sidecar uses meta
+
+After importing the route module, the sidecar reads `mod.meta`:
+- If it's a function, call it (after `__setServerData`) to get the meta object.
+- If it's a plain object, use it directly.
+- Merge the result into the layout's server data so the layout can render `<title>` and `<meta>` tags.
 
 ## Out of scope (MVP)
 
