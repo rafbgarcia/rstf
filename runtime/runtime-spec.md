@@ -57,10 +57,7 @@ Generates:
 let _data: Record<string, any> = {};
 
 export function serverData(): SharedUiUserAvatar.ServerData {
-  return {
-    userName: _data.userName ?? "",
-    avatarUrl: _data.avatarUrl ?? "",
-  } as SharedUiUserAvatar.ServerData;
+  return _data as SharedUiUserAvatar.ServerData;
 }
 
 export function __setServerData(data: Record<string, any>) {
@@ -186,10 +183,7 @@ const _initData = _isServer
 let _data: Record<string, any> = _initData;
 
 export function serverData(): SharedUiUserAvatar.ServerData {
-  return {
-    userName: _data.userName ?? "",
-    avatarUrl: _data.avatarUrl ?? "",
-  } as SharedUiUserAvatar.ServerData;
+  return _data as SharedUiUserAvatar.ServerData;
 }
 
 export function __setServerData(data: Record<string, any>) {

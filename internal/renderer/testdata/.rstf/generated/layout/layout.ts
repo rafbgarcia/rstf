@@ -2,9 +2,7 @@
 let _data: Record<string, any> = {};
 
 export function serverData(): { title: string } {
-  return {
-    title: _data.title ?? "",
-  };
+  return _data as { title: string };
 }
 
 export function __setServerData(data: Record<string, any>) {

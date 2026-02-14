@@ -2,10 +2,7 @@
 let _data: Record<string, any> = {};
 
 export function serverData(): { name: string; count: number } {
-  return {
-    name: _data.name ?? "",
-    count: _data.count ?? 0,
-  };
+  return _data as { name: string; count: number };
 }
 
 export function __setServerData(data: Record<string, any>) {

@@ -75,10 +75,7 @@ Alongside the type declarations, codegen generates a runtime module that the com
 let _data: Record<string, any> = {};
 
 export function serverData(): Dashboard.ServerData {
-  return {
-    posts: _data.posts ?? [],
-    author: _data.author ?? {},
-  } as Dashboard.ServerData;
+  return _data as Dashboard.ServerData;
 }
 
 export function __setServerData(data: Record<string, any>) {
@@ -86,7 +83,7 @@ export function __setServerData(data: Record<string, any>) {
 }
 ```
 
-The `serverData()` function returns the current request's data. Components call it inside their `View` function. The `__setServerData()` function is internal — called by the Bun sidecar before each render.
+The `serverData()` function returns the current request's data. Components call it inside their `View` function. The Go side always provides complete data via `json.Marshal`, so all struct fields are present — no per-field defaults needed. The `__setServerData()` function is internal — called by the Bun sidecar before each render.
 
 ### Namespace naming
 
