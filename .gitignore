@@ -18,4 +18,8 @@
 .DS_Store
 Thumbs.db
 
+# JS
+node_modules/
+bun.lockb
+
 .claude/*local*
