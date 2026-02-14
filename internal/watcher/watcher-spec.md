@@ -32,8 +32,7 @@ The watcher calls `onChange` whenever a relevant file is created, modified, or d
 ## Ignored paths
 
 The watcher skips:
-- `__generated__.ts` files (output of codegen, would cause loops)
-- `.rstf/` directory (framework output)
+- `.rstf/` directory (framework output — includes generated types and runtime modules)
 - Hidden files and directories (`.git`, `.DS_Store`, etc.)
 - `node_modules/`
 

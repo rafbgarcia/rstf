@@ -38,6 +38,14 @@ myapp/
       index.d.ts
       dashboard.d.ts
       users-id-edit.d.ts
+    generated/
+      main.ts                        # Runtime module for layout
+      routes/
+        index.ts
+        dashboard.ts
+        users.$id.edit.ts
+      shared/ui/
+        user-avatar.ts
     static/
       index/bundle.js
       dashboard/bundle.js
@@ -64,10 +72,9 @@ type Session struct {
 }
 
 // SSR provides layout data to main.tsx on every request.
-// Can also handle redirects via ctx.
-func SSR(ctx *rstf.Context) (session Session) {
+func SSR(ctx *rstf.Context) Session {
     // Check auth, load session
-    return
+    return Session{}
 }
 ```
 
@@ -198,6 +205,7 @@ The codegen produces `.rstf/server_gen.go` — the Go entry point. It declares `
 package main
 
 import (
+    "encoding/json"
     "fmt"
     "net/http"
 
@@ -211,6 +219,15 @@ import (
     useravatar "github.com/user/myapp/shared/ui/user-avatar"
 )
 
+// structToMap converts a struct to map[string]any via JSON round-trip.
+// Field names in the resulting map come from the struct's json tags.
+func structToMap(v any) map[string]any {
+    b, _ := json.Marshal(v)
+    var m map[string]any
+    json.Unmarshal(b, &m)
+    return m
+}
+
 func main() {
     r := renderer.New()
     r.Start(".")
@@ -218,15 +235,13 @@ func main() {
     // GET / — layout + route server data
     http.HandleFunc("GET /", func(w http.ResponseWriter, req *http.Request) {
         ctx := rstf.NewContext(req)
-        session := app.SSR(ctx)
-        featured := routeindex.SSR(ctx)
 
         html, err := r.Render(renderer.RenderRequest{
             Component: "routes/index",
             Layout:    "main",
             ServerData: map[string]map[string]any{
-                "main":         {"session": session},
-                "routes/index": {"featured": featured},
+                "main":         structToMap(app.SSR(ctx)),
+                "routes/index": structToMap(routeindex.SSR(ctx)),
             },
         })
         if err != nil {
@@ -239,17 +254,14 @@ func main() {
     // GET /dashboard — layout + route + shared component
     http.HandleFunc("GET /dashboard", func(w http.ResponseWriter, req *http.Request) {
         ctx := rstf.NewContext(req)
-        session := app.SSR(ctx)
-        posts, author := dashboard.SSR(ctx)
-        userName, avatarUrl := useravatar.SSR(ctx)
 
         html, err := r.Render(renderer.RenderRequest{
             Component: "routes/dashboard",
             Layout:    "main",
             ServerData: map[string]map[string]any{
-                "main":                  {"session": session},
-                "routes/dashboard":      {"posts": posts, "author": author},
-                "shared/ui/user-avatar": {"userName": userName, "avatarUrl": avatarUrl},
+                "main":                  structToMap(app.SSR(ctx)),
+                "routes/dashboard":      structToMap(dashboard.SSR(ctx)),
+                "shared/ui/user-avatar": structToMap(useravatar.SSR(ctx)),
             },
         })
         if err != nil {
@@ -262,17 +274,14 @@ func main() {
     // GET /users/{id}/edit — layout + route + shared component
     http.HandleFunc("GET /users/{id}/edit", func(w http.ResponseWriter, req *http.Request) {
         ctx := rstf.NewContext(req)
-        session := app.SSR(ctx)
-        user, roles := useredit.SSR(ctx)
-        userName, avatarUrl := useravatar.SSR(ctx)
 
         html, err := r.Render(renderer.RenderRequest{
             Component: "routes/users.$id.edit",
             Layout:    "main",
             ServerData: map[string]map[string]any{
-                "main":                  {"session": session},
-                "routes/users.$id.edit": {"user": user, "roles": roles},
-                "shared/ui/user-avatar": {"userName": userName, "avatarUrl": avatarUrl},
+                "main":                  structToMap(app.SSR(ctx)),
+                "routes/users.$id.edit": structToMap(useredit.SSR(ctx)),
+                "shared/ui/user-avatar": structToMap(useravatar.SSR(ctx)),
             },
         })
         if err != nil {
@@ -293,8 +302,8 @@ func main() {
 - **Layout always runs**: `app.SSR()` is called on every request, before route-specific handlers.
 - **Go 1.22+ ServeMux**: Uses method-and-pattern routing (e.g. `"GET /users/{id}/edit"`).
 - **Import analysis drives wiring**: Only `.go` files discovered via static import analysis (plus the route's own `.go` and the layout) are called.
-- **Named return values -> `map[string]any`**: Keys match Go param names, which match generated TypeScript prop names.
-- **`ServerData` keyed by component path**: Matches the renderer's ES module live binding model (see `renderer-spec.md`).
+- **Struct to map conversion**: Each `SSR()` returns a single struct. The generated `structToMap` helper converts it via JSON round-trip (`json.Marshal` → `json.Unmarshal`) so the resulting `map[string]any` keys come from the struct's `json` tags — matching the TypeScript field names in the generated modules.
+- **`ServerData` keyed by component path**: Each component's data is stored under its path in the `ServerData` map (see `renderer-spec.md`).
 - **Dynamic params**: Accessed via `ctx.Request.PathValue("id")` in user code.
 - **Raw HTML response**: The renderer returns HTML, the handler writes it directly. Page shell assembly (DOCTYPE, hydration scripts) is the caller's responsibility.
 
@@ -304,8 +313,7 @@ The `codegen` package (`internal/codegen/codegen.go`) already parses Go files an
 
 - Relative directory path (`RouteFile.Dir`)
 - Go package name (`RouteFile.Package`)
-- Function names and signatures (`RouteFile.Funcs` — each `RouteFunc` has `Name`, `Params`, `HasContext`)
-- Named return parameters (`RouteParam` with `Name`, `Type`, `IsSlice`)
+- Function names and return types (`RouteFile.Funcs` — each `RouteFunc` has `Name`, `ReturnType`, `HasContext`)
 - Referenced struct definitions (`RouteFile.Structs`)
 
 A `GenerateServer` function (not yet implemented) will combine:

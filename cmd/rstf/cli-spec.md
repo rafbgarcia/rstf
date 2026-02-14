@@ -33,7 +33,7 @@ Starts the development server with live reloading.
 
 #### Startup sequence
 
-1. **Run codegen** — parse route directories, generate `.rstf/types/{route}.d.ts` files and `.rstf/server_gen.go`.
+1. **Run codegen** — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` runtime modules, and `.rstf/server_gen.go`.
 2. **Bundle client JS** — for each SSR route, generate hydration entry and bundle with Bun into `.rstf/static/{route}/bundle.js`.
 3. **Start Bun sidecar** — launch `runtime/ssr.ts` as a child process, read port from stdout.
 4. **Start Go HTTP server** — compile and run `.rstf/server_gen.go`, listening on `:3000`.
@@ -67,7 +67,7 @@ rstf dev
 
   Watching for changes...
 
-[12:01:05] dashboard/dashboard.go changed → codegen + restart
+[12:01:05] routes/dashboard/index.go changed → codegen + restart
 [12:01:06] Server restarted
 ```
 
@@ -89,6 +89,11 @@ All framework-generated files go in `.rstf/` to keep the developer's project cle
   types/
     dashboard.d.ts           # Global types for /dashboard
     settings.d.ts            # Global types for /settings
+  generated/
+    main.ts                  # Runtime module for layout (serverData + __setServerData)
+    routes/
+      dashboard.ts           # Runtime module for /dashboard
+      settings.ts            # Runtime module for /settings
   entries/
     dashboard.entry.tsx      # Hydration entry for /dashboard
   static/
@@ -108,14 +113,22 @@ my-app/
     types/
       dashboard.d.ts
       settings.d.ts
+    generated/
+      main.ts
+      routes/
+        dashboard.ts
+        settings.ts
     server_gen.go
     static/
-  dashboard/
-    dashboard.go
-    dashboard.tsx
-  settings/
-    settings.go
-    settings.tsx
+  main.go                    # Layout SSR handler (package myapp)
+  main.tsx                   # Layout component
+  routes/
+    dashboard/
+      index.go               # Server data (package dashboard)
+      index.tsx               # GET /dashboard
+    settings/
+      index.go               # Server data (package settings)
+      index.tsx               # GET /settings
   go.mod
   package.json
   tsconfig.json
