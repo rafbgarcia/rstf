@@ -9,7 +9,7 @@ The watcher monitors the user's app directory for file changes and triggers the 
 ```go
 type Event struct {
     Path string
-    Kind string // "go", "ts", "tsx"
+    Kind string // "go", "tsx"
 }
 
 type Watcher struct { ... }
@@ -25,9 +25,10 @@ The watcher calls `onChange` whenever a relevant file is created, modified, or d
 
 | File changed | Event kind | What the CLI does |
 |-------------|------------|-------------------|
-| `*.go`      | `"go"`     | Re-run codegen → regenerate TS types + Go server → restart Go server |
-| `*.ts`      | `"ts"`     | Rebuild client bundles → signal Bun sidecar to clear module cache |
-| `*.tsx`     | `"tsx"`    | Rebuild client bundles → signal Bun sidecar to clear module cache |
+| `*.go`      | `"go"`     | Re-run codegen → re-bundle client JS → kill server (sidecar dies with it) → restart |
+| `*.tsx`     | `"tsx"`    | Re-bundle all client bundles → signal Bun sidecar to clear module cache (no restart) |
+
+`.ts` files are not watched — they don't trigger any rebuild since they don't have Go companions and aren't route components.
 
 ## Ignored paths
 
@@ -36,10 +37,10 @@ The watcher skips:
 - Hidden files and directories (`.git`, `.DS_Store`, etc.)
 - `node_modules/`
 
-## Debouncing
+## New directories
 
-Editors often trigger multiple file change events on a single save (write temp file, rename, delete backup). The watcher debounces with a ~100ms delay — it collects events during the window and fires `onChange` once with the most recent event per file.
+When a new directory is created (e.g. a new route), the watcher walks it and adds all subdirectories to the watch list.
 
 ## Implementation
 
-Uses `fsnotify` for filesystem notifications (efficient, no polling). Falls back to polling with `filepath.WalkDir` if `fsnotify` is not available on the platform.
+Uses `fsnotify` for filesystem notifications (efficient, no polling).

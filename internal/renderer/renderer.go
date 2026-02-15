@@ -65,6 +65,8 @@ func (r *Renderer) Start(projectRoot string) error {
 	select {
 	case port := <-portCh:
 		r.port = port
+		// Write port to file so the CLI watcher can invalidate the sidecar cache.
+		os.WriteFile(filepath.Join(absRoot, ".rstf", "sidecar.port"), []byte(strconv.Itoa(port)), 0644)
 	case err := <-errCh:
 		r.cmd.Process.Kill()
 		return err

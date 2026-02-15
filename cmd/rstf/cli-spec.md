@@ -31,44 +31,31 @@ If either is missing, it prints instructions and exits.
 
 Starts the development server.
 
-#### Startup sequence (current MVP)
+#### Startup sequence
 
 1. **Run codegen** (`codegen.Generate(".")`) — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` dual-mode runtime modules, `.rstf/entries/{name}.entry.tsx` hydration entries, and `.rstf/server_gen.go`.
 2. **Bundle client JS** — for each SSR route, run `bun build` on the hydration entry to produce `.rstf/static/{name}/bundle.js`.
 3. **Start Go HTTP server** — `go run ./.rstf/server_gen.go`, which itself starts the Bun sidecar and listens on `:3000`. The generated server serves static bundles from `/.rstf/static/` and assembles full HTML pages with `<!DOCTYPE html>`, server data injection, and bundle script tags.
-
-#### Startup sequence (planned)
-
-Steps 3-5 below are not yet implemented — the current MVP delegates sidecar management to the generated server.
-
-1. **Run codegen** — same as above.
-2. **Bundle client JS** — same as above.
-3. **Start Bun sidecar** — launch `runtime/ssr.ts` as a child process, read port from stdout.
-4. **Start Go HTTP server** — compile and run `.rstf/server_gen.go`, listening on `:3000`.
-5. **Start file watcher** — watch for changes (see `internal/watcher/watcher-spec.md`).
+4. **Start file watcher** — watch for `.go` and `.tsx` changes (see `internal/watcher/watcher-spec.md`).
 
 #### Process management
 
-Manages two child processes:
+The Go server owns the Bun sidecar in both dev and production — same architecture, one code path. The CLI manages a single child process (`go run`), which internally starts the sidecar.
 
-```
-rstf dev (orchestrator)
-  ├── Bun sidecar (runtime/ssr.ts) — long-running
-  └── Go HTTP server (.rstf/server_gen.go) — restarted on .go changes
-```
+Bun starts in milliseconds, so restarting the sidecar on Go changes has negligible cost. The slow part of a restart is `go run` recompilation, not sidecar startup.
+
+#### File watcher behavior
+
+- **`.go` change** — re-run codegen, kill the server (sidecar dies with it), re-bundle, restart.
+- **`.tsx` change** — re-bundle all entries, hit the sidecar's cache invalidation endpoint via `.rstf/sidecar.port`. No restart.
+
+See `internal/watcher/watcher-spec.md` for details.
 
 #### Graceful shutdown (Ctrl+C)
 
-Current MVP: forwards SIGINT to the `go run` child process, which exits and takes the Bun sidecar with it.
+Forwards SIGINT to the `go run` child process, which exits and takes the Bun sidecar with it.
 
-Planned:
-
-1. Stop the file watcher.
-2. SIGTERM the Go HTTP server.
-3. SIGTERM the Bun sidecar.
-4. Wait for both to exit.
-
-#### CLI output (current MVP)
+#### CLI output
 
 ```
 rstf dev
@@ -77,19 +64,20 @@ rstf dev
   HTTP server ..... starting on :3000
 ```
 
-#### CLI output (planned)
+With file watcher:
 
 ```
 rstf dev
   Codegen ......... done (2 routes)
   Client bundles .. done
-  Bun sidecar ..... running on :41234
-  HTTP server ..... running on :3000
+  HTTP server ..... starting on :3000
 
   Watching for changes...
 
-[12:01:05] routes/dashboard/index.go changed → codegen + restart
-[12:01:06] Server restarted
+  [change] routes/dashboard/index.go
+  Codegen ......... done (2 routes)
+  Client bundles .. done
+  HTTP server ..... restarting on :3000
 ```
 
 ### `rstf build` (future)
