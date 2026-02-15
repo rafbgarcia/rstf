@@ -1,16 +1,47 @@
 # Codegen Specification
 
-## What the developer writes
+## Overview
 
-A route directory contains a Go file with structs and a handler function:
+The codegen module produces all framework-generated files under `.rstf/`. It parses Go source files via AST, analyzes TypeScript imports for dependencies, and generates three categories of output:
+
+1. **TypeScript types** (`.rstf/types/*.d.ts`) — global type declarations from Go structs
+2. **Runtime modules** (`.rstf/generated/*.ts`) — `serverData()` + `__setServerData()` per component
+3. **Server entry point** (`.rstf/server_gen.go`) — Go `main()` that wires routes, calls `SSR()` handlers, and sends render requests
+
+## Generated output (`.rstf/` directory)
+
+All framework-generated files go in `.rstf/` to keep the developer's project clean:
 
 ```
-dashboard/
-  dashboard.go
-  dashboard.tsx
+.rstf/
+  server_gen.go              # Generated Go server with route handlers
+  types/
+    index.d.ts               # Global types for /
+    dashboard.d.ts           # Global types for /dashboard
+    users-id-edit.d.ts       # Global types for /users/{id}/edit
+  generated/
+    main.ts                  # Runtime module for layout
+    routes/
+      index.ts
+      dashboard.ts
+      users.$id.edit.ts
+    shared/ui/
+      user-avatar.ts
+  entries/
+    dashboard.entry.tsx      # Hydration entry for /dashboard (not yet implemented)
+  static/
+    index/bundle.js          # Hydration bundle (not yet implemented)
+    dashboard/bundle.js
 ```
+
+## TypeScript generation
+
+### What the developer writes
+
+A route directory contains a Go file with structs and a handler function. See `internal/conventions/conventions-spec.md` for file conventions.
 
 ```go
+// routes/dashboard/index.go
 package dashboard
 
 import rstf "github.com/rafbgarcia/rstf"
@@ -37,8 +68,6 @@ func SSR(ctx *rstf.Context) ServerData {
 ```
 
 The `.go` file is optional — a `.tsx` file can exist without a paired `.go` file (for pages with no server data).
-
-## What the framework generates
 
 ### TypeScript types (`.rstf/types/dashboard.d.ts`)
 
@@ -67,7 +96,7 @@ declare namespace Dashboard {
 
 ### Generated runtime module (`.rstf/generated/dashboard.ts`)
 
-Alongside the type declarations, codegen generates a runtime module that the component imports at runtime via `@rstf/dashboard`:
+Alongside the type declarations, codegen generates a runtime module that the component imports at runtime via `@rstf/routes/dashboard` (see `@rstf/` import alias resolution below):
 
 ```typescript
 // .rstf/generated/dashboard.ts
@@ -91,9 +120,9 @@ The namespace is derived from the route directory path, PascalCased:
 
 | Directory | Namespace |
 |-----------|-----------|
-| `dashboard/` | `Dashboard` |
-| `settings/` | `Settings` |
-| `users/profile/` | `UsersProfile` |
+| `routes/dashboard/` | `Dashboard` |
+| `routes/settings/` | `Settings` |
+| `shared/ui/user-avatar/` | `SharedUiUserAvatar` |
 
 ### How it works
 
@@ -111,15 +140,33 @@ The namespace is derived from the route directory path, PascalCased:
 
 ### TypeScript configuration
 
-`rstf init` creates a `tsconfig.json` that includes the types directory:
+`rstf init` creates a `tsconfig.json` that includes the types directory and configures the `@rstf/` import alias:
 
 ```json
 {
+  "compilerOptions": {
+    "paths": {
+      "@rstf/*": [".rstf/generated/*"]
+    }
+  },
   "include": [".rstf/types", "**/*.ts", "**/*.tsx"]
 }
 ```
 
-This makes all namespaced types globally available. The developer never imports them.
+This makes all namespaced types globally available (the developer never imports them) and maps `@rstf/` imports to the generated runtime modules.
+
+### `@rstf/` import alias resolution
+
+Components import server data via `@rstf/{path}`, where `{path}` matches the component's location relative to the project root:
+
+| Component | Import path | Resolves to |
+|-----------|-------------|-------------|
+| `main.tsx` | `@rstf/main` | `.rstf/generated/main.ts` |
+| `routes/dashboard/index.tsx` | `@rstf/routes/dashboard` | `.rstf/generated/routes/dashboard.ts` |
+| `routes/users.$id.edit/index.tsx` | `@rstf/routes/users.$id.edit` | `.rstf/generated/routes/users.$id.edit.ts` |
+| `shared/ui/user-avatar/user-avatar.tsx` | `@rstf/shared/ui/user-avatar` | `.rstf/generated/shared/ui/user-avatar.ts` |
+
+The `tsconfig.json` `paths` mapping handles this for TypeScript type checking. Bun also respects `tsconfig.json` paths at runtime, so the same mapping works for SSR and client-side bundling without additional configuration.
 
 ### Conventions
 
@@ -130,7 +177,7 @@ This makes all namespaced types globally available. The developer never imports 
 ### How the developer uses the generated types
 
 ```tsx
-import { serverData } from "@rstf/dashboard";
+import { serverData } from "@rstf/routes/dashboard";
 
 export function View() {
   const { posts, author } = serverData();
@@ -146,3 +193,169 @@ export function View() {
 ```
 
 The `serverData()` return type matches the `ServerData` struct. If the Go code changes (e.g. a field is renamed or a new field is added), the `.d.ts` and generated module regenerate on the next codegen run, and the TSX component will show a type error if it doesn't match.
+
+## Server generation
+
+The codegen also produces `.rstf/server_gen.go` — the Go entry point. It declares `package main`, imports the user's root package and all route/shared-component packages, and wires HTTP handlers.
+
+### Static import analysis
+
+The framework needs to know which `.go` files to call for each route. A route's component may import shared components that have their own `.go` files. The framework discovers these dependencies by statically analyzing TSX/TS imports at codegen time.
+
+#### How it works
+
+1. For each route, parse its `index.tsx` for `import` statements.
+2. For each local import (relative paths like `./` or `../`, not bare specifiers like `react`), resolve the file path.
+3. Check if a `.go` file exists in that file's directory (indicating server data).
+4. If yes, record it as a server data dependency for this route.
+5. Recursively scan the imported file's imports (with cycle detection via a visited-files set).
+6. Always include `main.go` — the layout runs on every request.
+
+#### Import parsing
+
+Imports are extracted with a regex scan of `from` clauses — no full TS parser needed:
+
+```
+from ['"](\./|\.\./)...['"]
+```
+
+Bare specifiers (`react`, `@rstf/...`) are skipped. Only local relative imports are followed.
+
+#### Output
+
+The analysis produces a dependency map — for each route, the list of component paths that have `.go` files:
+
+```
+GET /                -> [main, routes/index]
+GET /dashboard       -> [main, routes/dashboard, shared/ui/user-avatar]
+GET /users/{id}/edit -> [main, routes/users.$id.edit, shared/ui/user-avatar]
+```
+
+This tells the generated code which `SSR` functions to call per request.
+
+### Generated server code (`.rstf/server_gen.go`)
+
+```go
+// Code generated by rstf. DO NOT EDIT.
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "net/http"
+
+    rstf "github.com/rafbgarcia/rstf"
+    "github.com/rafbgarcia/rstf/internal/renderer"
+
+    app "github.com/user/myapp"
+    routeindex "github.com/user/myapp/routes/index"
+    dashboard "github.com/user/myapp/routes/dashboard"
+    useredit "github.com/user/myapp/routes/users.$id.edit"
+    useravatar "github.com/user/myapp/shared/ui/user-avatar"
+)
+
+// structToMap converts a struct to map[string]any via JSON round-trip.
+// Field names in the resulting map come from the struct's json tags.
+func structToMap(v any) map[string]any {
+    b, _ := json.Marshal(v)
+    var m map[string]any
+    json.Unmarshal(b, &m)
+    return m
+}
+
+func main() {
+    r := renderer.New()
+    r.Start(".")
+
+    // GET / — layout + route server data
+    http.HandleFunc("GET /", func(w http.ResponseWriter, req *http.Request) {
+        ctx := rstf.NewContext(req)
+
+        html, err := r.Render(renderer.RenderRequest{
+            Component: "routes/index",
+            Layout:    "main",
+            ServerData: map[string]map[string]any{
+                "main":         structToMap(app.SSR(ctx)),
+                "routes/index": structToMap(routeindex.SSR(ctx)),
+            },
+        })
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        fmt.Fprint(w, html)
+    })
+
+    // GET /dashboard — layout + route + shared component
+    http.HandleFunc("GET /dashboard", func(w http.ResponseWriter, req *http.Request) {
+        ctx := rstf.NewContext(req)
+
+        html, err := r.Render(renderer.RenderRequest{
+            Component: "routes/dashboard",
+            Layout:    "main",
+            ServerData: map[string]map[string]any{
+                "main":                  structToMap(app.SSR(ctx)),
+                "routes/dashboard":      structToMap(dashboard.SSR(ctx)),
+                "shared/ui/user-avatar": structToMap(useravatar.SSR(ctx)),
+            },
+        })
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        fmt.Fprint(w, html)
+    })
+
+    // GET /users/{id}/edit — layout + route + shared component
+    http.HandleFunc("GET /users/{id}/edit", func(w http.ResponseWriter, req *http.Request) {
+        ctx := rstf.NewContext(req)
+
+        html, err := r.Render(renderer.RenderRequest{
+            Component: "routes/users.$id.edit",
+            Layout:    "main",
+            ServerData: map[string]map[string]any{
+                "main":                  structToMap(app.SSR(ctx)),
+                "routes/users.$id.edit": structToMap(useredit.SSR(ctx)),
+                "shared/ui/user-avatar": structToMap(useravatar.SSR(ctx)),
+            },
+        })
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        fmt.Fprint(w, html)
+    })
+
+    http.ListenAndServe(":3000", nil)
+}
+```
+
+### Key details
+
+- **User's package is importable**: `main.go` uses the app's package name (e.g. `package myapp`), not `package main`. The generated code imports it (e.g. `app "github.com/user/myapp"`) and calls `app.SSR(ctx)` for layout data.
+- **Generated file is the entry point**: `.rstf/server_gen.go` has `package main` and `func main()`. The `rstf dev` CLI compiles and runs it.
+- **Layout always runs**: `app.SSR()` is called on every request, before route-specific handlers.
+- **Go 1.22+ ServeMux**: Uses method-and-pattern routing (e.g. `"GET /users/{id}/edit"`). See `internal/conventions/conventions-spec.md` for path resolution rules.
+- **Import analysis drives wiring**: Only `.go` files discovered via static import analysis (plus the route's own `.go` and the layout) are called.
+- **Struct to map conversion**: Each `SSR()` returns a single struct. The generated `structToMap` helper converts it via JSON round-trip (`json.Marshal` → `json.Unmarshal`) so the resulting `map[string]any` keys come from the struct's `json` tags — matching the TypeScript field names in the generated modules.
+- **`ServerData` keyed by component path**: Each component's data is stored under its directory path in the `ServerData` map (e.g. `"routes/dashboard"`, `"shared/ui/user-avatar"`). See `internal/renderer/renderer-spec.md` for how the sidecar resolves these paths to actual files.
+- **Dynamic params**: Accessed via `ctx.Request.PathValue("id")` in user code.
+- **Raw HTML response**: The renderer returns HTML, the handler writes it directly. Page shell assembly (DOCTYPE, hydration scripts) is the caller's responsibility.
+
+### Inputs
+
+The `codegen` package (`internal/codegen/codegen.go`) parses Go files and extracts:
+
+- Relative directory path (`RouteFile.Dir`)
+- Go package name (`RouteFile.Package`)
+- Function names and return types (`RouteFile.Funcs` — each `RouteFunc` has `Name`, `ReturnType`, `HasContext`)
+- Referenced struct definitions (`RouteFile.Structs`)
+
+A `GenerateServer` function (not yet implemented) will combine:
+
+1. The module path from the user's `go.mod`
+2. The parsed `[]RouteFile` from `codegen.ParseDir` (for route and shared-component `.go` files, plus `main.go`)
+3. The dependency map from the static import analysis
+4. Route path resolution (folder name → URL pattern, see `internal/conventions/conventions-spec.md`)
+
+to produce `.rstf/server_gen.go`.

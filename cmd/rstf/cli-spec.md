@@ -14,7 +14,7 @@ Creates:
 
 - `go.mod` — Go module (prompts for module path or infers from directory)
 - `package.json` — with `react`, `react-dom`, `@types/react` dependencies
-- `tsconfig.json` — configured with `"include": [".rstf/types", "**/*.ts", "**/*.tsx"]`
+- `tsconfig.json` — configured with `@rstf/*` path alias and type includes (see `internal/codegen/codegen-spec.md` for full tsconfig)
 - `.gitignore` — ignoring `.rstf/`, `node_modules/`
 - `.rstf/` — empty framework output directory
 
@@ -79,58 +79,6 @@ Production build.
 - Bundles client JS with minification.
 - Compiles Go server into a single binary.
 
-## Generated output (`.rstf/` directory)
+## Project structure
 
-All framework-generated files go in `.rstf/` to keep the developer's project clean:
-
-```
-.rstf/
-  server_gen.go              # Generated Go server with route handlers
-  types/
-    dashboard.d.ts           # Global types for /dashboard
-    settings.d.ts            # Global types for /settings
-  generated/
-    main.ts                  # Runtime module for layout (serverData + __setServerData)
-    routes/
-      dashboard.ts           # Runtime module for /dashboard
-      settings.ts            # Runtime module for /settings
-  entries/
-    dashboard.entry.tsx      # Hydration entry for /dashboard
-  static/
-    dashboard/
-      bundle.js              # Hydration bundle for /dashboard
-    settings/
-      bundle.js              # Hydration bundle for /settings
-```
-
-## User's project structure
-
-After `rstf init` and creating some routes:
-
-```
-my-app/
-  .rstf/                     # gitignored, framework output
-    types/
-      dashboard.d.ts
-      settings.d.ts
-    generated/
-      main.ts
-      routes/
-        dashboard.ts
-        settings.ts
-    server_gen.go
-    static/
-  main.go                    # Layout SSR handler (package myapp)
-  main.tsx                   # Layout component
-  routes/
-    dashboard/
-      index.go               # Server data (package dashboard)
-      index.tsx               # GET /dashboard
-    settings/
-      index.go               # Server data (package settings)
-      index.tsx               # GET /settings
-  go.mod
-  package.json
-  tsconfig.json
-  .gitignore
-```
+See `ARCHITECTURE.md` for the user's project structure, `internal/conventions/conventions-spec.md` for file conventions, and `internal/codegen/codegen-spec.md` for the generated `.rstf/` directory.

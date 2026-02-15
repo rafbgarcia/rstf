@@ -11,15 +11,7 @@ It consists of two parts:
 
 ## Server data model
 
-Components don't receive server data as React props. Instead, each `.go` file defines `func SSR` returning a struct. The struct is JSON-serialized and made available to the paired `.tsx` file via a `serverData()` function imported from `@rstf/{path}`.
-
-The render request carries a `serverData` map keyed by component path. Before rendering, the sidecar imports each component's generated module (at `.rstf/generated/{path}.ts`) and calls its `__setServerData()` function. Components call `serverData()` inside their `View` function to read the current request's data.
-
-This means:
-- Server data flows through generated modules (scoped per component path)
-- Components access data by calling `serverData()` at render time, not at import time
-- React props are used for component-to-component communication (parent → child)
-- A component can use both: server data from its `.go` file AND React props from its parent
+The render request carries a `serverData` map keyed by component path. Before rendering, the sidecar imports each component's generated module and calls `__setServerData(data)`. See `internal/codegen/codegen-spec.md` for the generated module format and `runtime/runtime-spec.md` for how components consume server data.
 
 ## Bun sidecar (`runtime/ssr.ts`)
 
@@ -120,13 +112,13 @@ The sidecar receives the project root as a command-line argument:
 bun run runtime/ssr.ts --project-root /path/to/myapp
 ```
 
-Component paths in render requests are relative to this root. So `"component": "routes/dashboard"` resolves to `{project-root}/routes/dashboard.tsx`.
+Component paths in render requests are **directory paths** relative to the project root. The sidecar resolves them to actual files using the folder convention (see `internal/conventions/conventions-spec.md`):
 
-This supports any component location — routes, shared components, or the layout entrypoint:
+- **Route components** use `index.tsx` inside the directory: `"routes/dashboard"` → `{project-root}/routes/dashboard/index.tsx`
+- **Shared components** use a file matching the directory name: `"shared/ui/user-avatar"` → `{project-root}/shared/ui/user-avatar/user-avatar.tsx`
+- **Layout** is a root-level file: `"main"` → `{project-root}/main.tsx`
 
-- `"routes/dashboard"` → `{project-root}/routes/dashboard.tsx`
-- `"shared/ui/user-avatar"` → `{project-root}/shared/ui/user-avatar.tsx`
-- `"main"` → `{project-root}/main.tsx`
+The sidecar uses Bun's standard module resolution (`import()`) which resolves directory paths to `index.tsx` automatically. For shared components whose entry file matches the directory name rather than `index.tsx`, the sidecar appends the basename (e.g. `shared/ui/user-avatar` → `shared/ui/user-avatar/user-avatar.tsx`).
 
 ### Module cache
 
