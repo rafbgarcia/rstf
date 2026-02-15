@@ -205,21 +205,28 @@ The framework needs to know which `.go` files to call for each route. A route's 
 #### How it works
 
 1. For each route, parse its `index.tsx` for `import` statements.
-2. For each local import (relative paths like `./` or `../`, not bare specifiers like `react`), resolve the file path.
+2. For each local import (relative paths like `./` or `../`, not bare specifiers like `react`), resolve the file path. Only `.tsx` files are resolved — `.ts` utility files don't have `.go` pairings.
 3. Check if a `.go` file exists in that file's directory (indicating server data).
 4. If yes, record it as a server data dependency for this route.
 5. Recursively scan the imported file's imports (with cycle detection via a visited-files set).
-6. Always include `main.go` — the layout runs on every request.
+6. Always include `main.go` — the layout runs on every request. (The `AnalyzeDeps` function returns only discovered deps; the caller prepends `"main"`.)
 
 #### Import parsing
 
 Imports are extracted with a regex scan of `from` clauses — no full TS parser needed:
 
 ```
-from ['"](\./|\.\./)...['"]
+from\s+['"](\.\.?/[^'"]+)['"]
 ```
 
-Bare specifiers (`react`, `@rstf/...`) are skipped. Only local relative imports are followed.
+Only local relative imports (`./` and `../`) are followed. Bare specifiers (`react`, `@rstf/...`) and aliased imports (e.g. `@shared/*`) are skipped — the framework enforces relative imports for local dependencies.
+
+#### File resolution
+
+Import specifiers are resolved to `.tsx` files only (`.ts` files are utility/hook code without server data):
+
+1. `{specifier}.tsx`
+2. `{specifier}/index.tsx`
 
 #### Output
 
