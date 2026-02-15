@@ -1,34 +1,32 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
-func main() {
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
-	}
-
-	switch os.Args[1] {
-	case "dev":
-		// Parse --port flag from remaining args.
-		devFlags := flag.NewFlagSet("dev", flag.ExitOnError)
-		port := devFlags.String("port", "3000", "HTTP server port")
-		devFlags.Parse(os.Args[2:])
-		runDev(*port)
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", os.Args[1])
-		printUsage()
-		os.Exit(1)
-	}
+var rootCmd = &cobra.Command{
+	Use:   "rstf",
+	Short: "rstf framework CLI",
 }
 
-func printUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: rstf <command>")
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Commands:")
-	fmt.Fprintln(os.Stderr, "  dev    Start the development server")
+var devCmd = &cobra.Command{
+	Use:   "dev",
+	Short: "Start the development server",
+	Run: func(cmd *cobra.Command, args []string) {
+		port, _ := cmd.Flags().GetString("port")
+		runDev(port)
+	},
+}
+
+func init() {
+	devCmd.Flags().String("port", "3000", "HTTP server port")
+	rootCmd.AddCommand(devCmd)
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }
