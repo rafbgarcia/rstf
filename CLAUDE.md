@@ -24,6 +24,7 @@ Key modules:
 
 ## Design philosophy
 
+**Low cognitive load**
 **One obvious way to do it**
 **Conventions over configuration**
 **Opinionated design**
