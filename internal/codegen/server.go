@@ -190,9 +190,13 @@ func writeImports(b *strings.Builder, imports []serverImport) {
 	b.WriteString("import (\n")
 	// Standard library.
 	b.WriteString("\t\"encoding/json\"\n")
+	b.WriteString("\t\"flag\"\n")
 	b.WriteString("\t\"fmt\"\n")
 	b.WriteString("\t\"net/http\"\n")
+	b.WriteString("\t\"os\"\n")
+	b.WriteString("\t\"os/signal\"\n")
 	b.WriteString("\t\"strings\"\n")
+	b.WriteString("\t\"syscall\"\n")
 	b.WriteString("\n")
 	// Framework.
 	fmt.Fprintf(b, "\trstf %q\n", frameworkModule)
@@ -235,8 +239,20 @@ func writeMain(
 	deps map[string][]string,
 ) {
 	b.WriteString("func main() {\n")
+	b.WriteString("\tport := flag.String(\"port\", \"3000\", \"HTTP server port\")\n")
+	b.WriteString("\tflag.Parse()\n\n")
 	b.WriteString("\tr := renderer.New()\n")
 	b.WriteString("\tr.Start(\".\")\n")
+	b.WriteString("\tdefer r.Stop()\n")
+	b.WriteString("\n")
+	b.WriteString("\t// Stop the sidecar on interrupt/terminate signals.\n")
+	b.WriteString("\tgo func() {\n")
+	b.WriteString("\t\tc := make(chan os.Signal, 1)\n")
+	b.WriteString("\t\tsignal.Notify(c, os.Interrupt, syscall.SIGTERM)\n")
+	b.WriteString("\t\t<-c\n")
+	b.WriteString("\t\tr.Stop()\n")
+	b.WriteString("\t\tos.Exit(0)\n")
+	b.WriteString("\t}()\n")
 
 	// Static file serving for client bundles.
 	b.WriteString("\n")
@@ -303,7 +319,7 @@ func writeMain(
 	}
 
 	b.WriteString("\n")
-	b.WriteString("\thttp.ListenAndServe(\":3000\", nil)\n")
+	b.WriteString("\thttp.ListenAndServe(\":\"+*port, nil)\n")
 	b.WriteString("}\n")
 }
 

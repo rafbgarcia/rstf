@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 )
@@ -13,7 +14,11 @@ func main() {
 
 	switch os.Args[1] {
 	case "dev":
-		runDev()
+		// Parse --port flag from remaining args.
+		devFlags := flag.NewFlagSet("dev", flag.ExitOnError)
+		port := devFlags.String("port", "3000", "HTTP server port")
+		devFlags.Parse(os.Args[2:])
+		runDev(*port)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", os.Args[1])
 		printUsage()

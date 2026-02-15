@@ -14,7 +14,7 @@ import (
 	"github.com/rafbgarcia/rstf/internal/watcher"
 )
 
-func runDev() {
+func runDev(port string) {
 	// Step 1: Run codegen.
 	fmt.Print("  Codegen ......... ")
 	result, err := codegen.Generate(".")
@@ -35,8 +35,8 @@ func runDev() {
 	fmt.Println("done")
 
 	// Step 3: Start the Go HTTP server.
-	fmt.Println("  HTTP server ..... starting on :3000")
-	server := startServer()
+	fmt.Printf("  HTTP server ..... starting on :%s\n", port)
+	server := startServer(port)
 
 	// Step 4: Start file watcher.
 	fmt.Println("\n  Watching for changes...")
@@ -58,7 +58,7 @@ func runDev() {
 			switch ev.Kind {
 			case "go":
 				fmt.Printf("\n  [change] %s\n", ev.Path)
-				server = handleGoChange(server, &result)
+				server = handleGoChange(server, &result, port)
 			case "tsx":
 				fmt.Printf("\n  [change] %s\n", ev.Path)
 				handleTsxChange(result.Entries)
@@ -73,7 +73,7 @@ func runDev() {
 }
 
 // handleGoChange re-runs codegen, re-bundles, kills the server, and restarts.
-func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult) *exec.Cmd {
+func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult, port string) *exec.Cmd {
 	stopServer(server)
 
 	fmt.Print("  Codegen ......... ")
@@ -81,7 +81,7 @@ func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult) *exec.Cmd 
 	if err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "  codegen error: %s\n", err)
-		return startServer() // restart with old code
+		return startServer(port) // restart with old code
 	}
 	fmt.Printf("done (%d routes)\n", newResult.RouteCount)
 
@@ -94,8 +94,8 @@ func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult) *exec.Cmd 
 	}
 
 	*result = newResult
-	fmt.Println("  HTTP server ..... restarting on :3000")
-	return startServer()
+	fmt.Printf("  HTTP server ..... restarting on :%s\n", port)
+	return startServer(port)
 }
 
 // handleTsxChange re-bundles client JS and invalidates the sidecar module cache.
@@ -112,8 +112,8 @@ func handleTsxChange(entries map[string]string) {
 }
 
 // startServer launches the generated Go server as a child process.
-func startServer() *exec.Cmd {
-	cmd := exec.Command("go", "run", "./.rstf/server_gen.go")
+func startServer(port string) *exec.Cmd {
+	cmd := exec.Command("go", "run", "./.rstf/server_gen.go", "--port", port)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

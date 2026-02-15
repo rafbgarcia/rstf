@@ -31,11 +31,15 @@ If either is missing, it prints instructions and exits.
 
 Starts the development server.
 
+#### Flags
+
+- `--port <port>` — HTTP server port (default: `3000`). Passed through to the generated server binary.
+
 #### Startup sequence
 
 1. **Run codegen** (`codegen.Generate(".")`) — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` dual-mode runtime modules, `.rstf/entries/{name}.entry.tsx` hydration entries, and `.rstf/server_gen.go`.
 2. **Bundle client JS** — for each SSR route, run `bun build` on the hydration entry to produce `.rstf/static/{name}/bundle.js`.
-3. **Start Go HTTP server** — `go run ./.rstf/server_gen.go`, which itself starts the Bun sidecar and listens on `:3000`. The generated server serves static bundles from `/.rstf/static/` and assembles full HTML pages with `<!DOCTYPE html>`, server data injection, and bundle script tags.
+3. **Start Go HTTP server** — `go run ./.rstf/server_gen.go --port {port}`, which itself starts the Bun sidecar and listens on the specified port. The generated server serves static bundles from `/.rstf/static/` and assembles full HTML pages with `<!DOCTYPE html>`, server data injection, and bundle script tags.
 4. **Start file watcher** — watch for `.go` and `.tsx` changes (see `internal/watcher/watcher-spec.md`).
 
 #### Process management
@@ -53,7 +57,7 @@ See `internal/watcher/watcher-spec.md` for details.
 
 #### Graceful shutdown (Ctrl+C)
 
-Forwards SIGINT to the `go run` child process, which exits and takes the Bun sidecar with it.
+Forwards SIGINT to the `go run` child process. The generated server handles SIGINT/SIGTERM by calling `renderer.Stop()` to terminate the Bun sidecar before exiting. This prevents orphaned sidecar processes.
 
 #### CLI output
 
