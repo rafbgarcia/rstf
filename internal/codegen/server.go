@@ -36,7 +36,7 @@ type routeEntry struct {
 //     to the project root (".", "routes/dashboard", "shared/ui/user-avatar")
 //   - deps: maps route dir → dep dirs from AnalyzeDeps. The layout dir "." is
 //     NOT expected in deps — GenerateServer always adds it.
-func GenerateServer(modulePath string, files []RouteFile, deps map[string][]string) string {
+func GenerateServer(modulePath string, files []RouteFile, deps map[string][]string) (string, error) {
 	// Build dir → RouteFile lookup.
 	fileMap := map[string]RouteFile{}
 	for _, f := range files {
@@ -45,6 +45,14 @@ func GenerateServer(modulePath string, files []RouteFile, deps map[string][]stri
 
 	// Find the layout (root package).
 	layout, hasLayout := fileMap["."]
+
+	// Validate: main.go must not use "package main" — it needs to be importable
+	// by the generated server_gen.go which itself declares package main.
+	if hasLayout && layout.Package == "main" {
+		return "", fmt.Errorf(
+			"main.go: package main is reserved for rstf, please use a different package name (e.g. your app name)",
+		)
+	}
 
 	// Identify route dirs and compute URL patterns.
 	var routes []routeEntry
@@ -98,7 +106,7 @@ func GenerateServer(modulePath string, files []RouteFile, deps map[string][]stri
 	writeStructToMap(&b)
 	writeMain(&b, routes, layout, hasLayout, aliasMap, deps)
 
-	return b.String()
+	return b.String(), nil
 }
 
 // collectImports gathers all unique user-package imports across the layout and
@@ -111,7 +119,7 @@ func collectImports(
 	deps map[string][]string,
 	fileMap map[string]RouteFile,
 ) []serverImport {
-	seen := map[string]bool{}     // dir → already added
+	seen := map[string]bool{}       // dir → already added
 	usedAliases := map[string]int{} // alias → count (for collision detection)
 	var imports []serverImport
 
@@ -152,7 +160,7 @@ func collectImports(
 			Alias:      alias,
 			ImportPath: importPath,
 			Dir:        dir,
-			HasContext:  hasCtx,
+			HasContext: hasCtx,
 		})
 	}
 
