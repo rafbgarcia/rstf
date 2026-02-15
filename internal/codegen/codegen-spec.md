@@ -164,7 +164,7 @@ Components import server data via `@rstf/{path}`, where `{path}` matches the com
 | `main.tsx` | `@rstf/main` | `.rstf/generated/main.ts` |
 | `routes/dashboard/index.tsx` | `@rstf/routes/dashboard` | `.rstf/generated/routes/dashboard.ts` |
 | `routes/users.$id.edit/index.tsx` | `@rstf/routes/users.$id.edit` | `.rstf/generated/routes/users.$id.edit.ts` |
-| `shared/ui/user-avatar/user-avatar.tsx` | `@rstf/shared/ui/user-avatar` | `.rstf/generated/shared/ui/user-avatar.ts` |
+| `shared/ui/user-avatar/index.tsx` | `@rstf/shared/ui/user-avatar` | `.rstf/generated/shared/ui/user-avatar.ts` |
 
 The `tsconfig.json` `paths` mapping handles this for TypeScript type checking. Bun also respects `tsconfig.json` paths at runtime, so the same mapping works for SSR and client-side bundling without additional configuration.
 

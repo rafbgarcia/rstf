@@ -46,7 +46,7 @@ func TestAnalyzeDeps_SharedComponentWithGo(t *testing.T) {
 	// routes/dashboard/index.tsx — imports shared component
 	writeFile(t, filepath.Join(root, "routes", "dashboard", "index.tsx"), `
 import { serverData } from "@rstf/routes/dashboard";
-import { View as UserAvatar } from "../../shared/ui/user-avatar/user-avatar";
+import { View as UserAvatar } from "../../shared/ui/user-avatar";
 
 export function View() {
   return <div><UserAvatar /></div>;
@@ -58,13 +58,13 @@ type ServerData struct { Title string }
 func SSR() ServerData { return ServerData{} }
 `)
 
-	// shared/ui/user-avatar/user-avatar.tsx
-	writeFile(t, filepath.Join(root, "shared", "ui", "user-avatar", "user-avatar.tsx"), `
+	// shared/ui/user-avatar/index.tsx
+	writeFile(t, filepath.Join(root, "shared", "ui", "user-avatar", "index.tsx"), `
 import { serverData } from "@rstf/shared/ui/user-avatar";
 export function View() { return <img />; }
 `)
-	// shared/ui/user-avatar/user-avatar.go — has server data
-	writeFile(t, filepath.Join(root, "shared", "ui", "user-avatar", "user-avatar.go"), `
+	// shared/ui/user-avatar/index.go — has server data
+	writeFile(t, filepath.Join(root, "shared", "ui", "user-avatar", "index.go"), `
 package useravatar
 type ServerData struct { Name string }
 func SSR() ServerData { return ServerData{} }
@@ -256,7 +256,7 @@ func TestExtractLocalImports(t *testing.T) {
 	content := []byte(`
 import { useState } from "react";
 import { serverData } from "@rstf/routes/dashboard";
-import { View as UserAvatar } from "../../shared/ui/user-avatar/user-avatar";
+import { View as UserAvatar } from "../../shared/ui/user-avatar";
 import { Button } from "./Button";
 import type { ReactNode } from "react";
 import { helper } from "../utils/helper";
@@ -265,7 +265,7 @@ import { helper } from "../utils/helper";
 	got := extractLocalImports(content)
 	sort.Strings(got)
 	want := []string{
-		"../../shared/ui/user-avatar/user-avatar",
+		"../../shared/ui/user-avatar",
 		"../utils/helper",
 		"./Button",
 	}

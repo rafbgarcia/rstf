@@ -115,10 +115,10 @@ bun run runtime/ssr.ts --project-root /path/to/myapp
 Component paths in render requests are **directory paths** relative to the project root. The sidecar resolves them to actual files using the folder convention (see `internal/conventions/conventions-spec.md`):
 
 - **Route components** use `index.tsx` inside the directory: `"routes/dashboard"` → `{project-root}/routes/dashboard/index.tsx`
-- **Shared components** use a file matching the directory name: `"shared/ui/user-avatar"` → `{project-root}/shared/ui/user-avatar/user-avatar.tsx`
+- **Shared components** also use `index.tsx`: `"shared/ui/user-avatar"` → `{project-root}/shared/ui/user-avatar/index.tsx`
 - **Layout** is a root-level file: `"main"` → `{project-root}/main.tsx`
 
-The sidecar uses Bun's standard module resolution (`import()`) which resolves directory paths to `index.tsx` automatically. For shared components whose entry file matches the directory name rather than `index.tsx`, the sidecar appends the basename (e.g. `shared/ui/user-avatar` → `shared/ui/user-avatar/user-avatar.tsx`).
+The sidecar uses Bun's standard module resolution (`import()`) which resolves directory paths to `index.tsx` automatically. Since both routes and shared components use the `index.tsx` convention, no special resolution logic is needed.
 
 ### Module cache
 

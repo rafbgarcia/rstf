@@ -80,8 +80,8 @@ Shared components that need server data must be in their own directory (same Go 
 
 ```
 shared/ui/user-avatar/
-  user-avatar.tsx              # Component
-  user-avatar.go               # Server data (package useravatar)
+  index.tsx                    # Component
+  index.go                     # Server data (package useravatar)
 ```
 
 Standalone components without server data can live anywhere:

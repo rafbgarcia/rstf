@@ -21,8 +21,8 @@ myapp/
   shared/
     ui/
       user-avatar/
-        user-avatar.tsx              # Component with server data
-        user-avatar.go
+        index.tsx                    # Component with server data
+        index.go
       button.tsx                     # Standalone component (no .go)
     hooks/
       some-hook.ts                   # Shared TypeScript code

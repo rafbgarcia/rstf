@@ -28,7 +28,7 @@ A component can use both server data AND React props:
 - **React props** (from parent component): passed as regular JSX attributes — for component-to-component communication
 
 ```tsx
-// shared/ui/user-avatar.tsx
+// shared/ui/user-avatar/index.tsx
 import { serverData } from "@rstf/shared/ui/user-avatar";
 
 export function View({ notificationCount }: { notificationCount?: number }) {
