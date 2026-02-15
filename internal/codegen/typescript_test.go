@@ -185,6 +185,7 @@ func TestNamespace(t *testing.T) {
 		dir  string
 		want string
 	}{
+		{".", "Main"},
 		{"dashboard", "Dashboard"},
 		{"settings", "Settings"},
 		{"users/profile", "UsersProfile"},

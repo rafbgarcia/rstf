@@ -60,6 +60,9 @@ func ParseDir(rootDir string) ([]RouteFile, error) {
 		if err != nil {
 			return err
 		}
+		if d.IsDir() && d.Name() == ".rstf" {
+			return filepath.SkipDir
+		}
 		if d.IsDir() || filepath.Ext(path) != ".go" {
 			return nil
 		}
