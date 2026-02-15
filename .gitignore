@@ -18,6 +18,11 @@
 .DS_Store
 Thumbs.db
 
+# Framework output
+.rstf/
+# CLI binary
+rstf
+
 # JS
 node_modules/
 bun.lockb

@@ -6,7 +6,7 @@
 
 ## Commands
 
-### `rstf init`
+### `rstf init` (not yet implemented)
 
 Scaffolds a new project in the current directory.
 
@@ -29,11 +29,18 @@ If either is missing, it prints instructions and exits.
 
 ### `rstf dev`
 
-Starts the development server with live reloading.
+Starts the development server.
 
-#### Startup sequence
+#### Startup sequence (current MVP)
 
-1. **Run codegen** — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` runtime modules, and `.rstf/server_gen.go`.
+1. **Run codegen** (`codegen.Generate(".")`) — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` runtime modules, and `.rstf/server_gen.go`.
+2. **Start Go HTTP server** — `go run ./.rstf/server_gen.go`, which itself starts the Bun sidecar and listens on `:3000`.
+
+#### Startup sequence (planned)
+
+Steps 2-5 below are not yet implemented — the current MVP delegates sidecar management to the generated server.
+
+1. **Run codegen** — same as above.
 2. **Bundle client JS** — for each SSR route, generate hydration entry and bundle with Bun into `.rstf/static/{route}/bundle.js`.
 3. **Start Bun sidecar** — launch `runtime/ssr.ts` as a child process, read port from stdout.
 4. **Start Go HTTP server** — compile and run `.rstf/server_gen.go`, listening on `:3000`.
@@ -51,12 +58,24 @@ rstf dev (orchestrator)
 
 #### Graceful shutdown (Ctrl+C)
 
+Current MVP: forwards SIGINT to the `go run` child process, which exits and takes the Bun sidecar with it.
+
+Planned:
+
 1. Stop the file watcher.
 2. SIGTERM the Go HTTP server.
 3. SIGTERM the Bun sidecar.
 4. Wait for both to exit.
 
-#### CLI output
+#### CLI output (current MVP)
+
+```
+rstf dev
+  Codegen ......... done (2 routes)
+  HTTP server ..... starting on :3000
+```
+
+#### CLI output (planned)
 
 ```
 rstf dev

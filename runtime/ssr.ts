@@ -21,7 +21,7 @@ const moduleCache = new Map<string, any>();
 const generatedModuleCache = new Map<string, any>();
 
 async function loadComponent(componentPath: string): Promise<Function> {
-  const fullPath = `${projectRoot}/${componentPath}.tsx`;
+  const fullPath = `${projectRoot}/${componentPath}`;
 
   let mod = moduleCache.get(fullPath);
   if (!mod) {

@@ -6,7 +6,7 @@ Developers write Go route handlers that return typed data, and React components 
 
 The framework generates TypeScript types from Go structs and handles SSR via a Bun sidecar. Client-side hydration is planned but not yet implemented.
 
-The CLI (`rstf init`, `rstf dev`) orchestrates codegen, bundling, and live reloading.
+The CLI (`rstf dev`) orchestrates codegen and starts the server. `rstf init` and `rstf build` are not yet implemented.
 
 ## Understanding the codebase
 
@@ -18,7 +18,7 @@ Key modules:
 - `internal/renderer/` — Go client + Bun sidecar for SSR via `renderToString`
 - `internal/conventions/` — File conventions, route path resolution rules
 - `internal/watcher/` — File change monitoring for live reload (not yet implemented)
-- `cmd/rstf/` — CLI commands: `init`, `dev`, `build` (not yet implemented)
+- `cmd/rstf/` — CLI entry point: `dev` is implemented; `init` and `build` are not yet implemented
 - `runtime/ssr.ts` — Bun HTTP server that executes React SSR
 - `context.go`, `logger.go` — Request-scoped context and structured logging
 

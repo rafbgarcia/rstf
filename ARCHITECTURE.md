@@ -42,7 +42,7 @@ See `internal/conventions/conventions-spec.md` for file conventions and route pa
 
 **Watcher** (`internal/watcher/`) — Monitors `.go`, `.ts`, and `.tsx` files for changes during development. Triggers codegen + server restart for Go changes, and bundle rebuild + sidecar cache invalidation for TypeScript changes. Not yet implemented.
 
-**CLI** (`cmd/rstf/`) — Developer-facing binary. `rstf init` scaffolds a project, `rstf dev` orchestrates the full dev loop: codegen → bundle → start sidecar → start Go server → watch files. Not yet implemented.
+**CLI** (`cmd/rstf/`) — Developer-facing binary.
 
 **Framework core** (`context.go`, `logger.go`) — Request-scoped `Context` with structured logging, passed to route handlers.
 
@@ -105,11 +105,11 @@ shared/      │              │                      │
 
 Each module has a co-located `*-spec.md` file as the source of truth. Each concept is documented in one spec only — other specs cross-reference rather than duplicate.
 
-| Spec                                 | Owns                                                                        |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| `internal/codegen/codegen-spec.md`             | Go parsing, type mapping, generated module format, `@rstf/` alias, server code generation, `.rstf/` output |
-| `internal/renderer/renderer-spec.md`           | SSR protocol, request/response format, sidecar lifecycle, concurrency model                |
-| `internal/conventions/conventions-spec.md`     | File conventions, routing rules, route path resolution                                     |
-| `runtime/runtime-spec.md`                      | Runtime behavior of serverData(), layout composition, hydration (planned)   |
-| `internal/watcher/watcher-spec.md`             | File watching, debouncing, rebuild triggers                                 |
-| `cmd/rstf/cli-spec.md`                         | CLI commands, startup sequence, process management                          |
+| Spec                                       | Owns                                                                                                       |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `internal/codegen/codegen-spec.md`         | Go parsing, type mapping, generated module format, `@rstf/` alias, server code generation, `.rstf/` output |
+| `internal/renderer/renderer-spec.md`       | SSR protocol, request/response format, sidecar lifecycle, concurrency model                                |
+| `internal/conventions/conventions-spec.md` | File conventions, routing rules, route path resolution                                                     |
+| `runtime/runtime-spec.md`                  | Runtime behavior of serverData(), layout composition, hydration (planned)                                  |
+| `internal/watcher/watcher-spec.md`         | File watching, debouncing, rebuild triggers                                                                |
+| `cmd/rstf/cli-spec.md`                     | CLI commands, startup sequence, process management                                                         |
