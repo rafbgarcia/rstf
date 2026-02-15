@@ -1,6 +1,3 @@
-import { createElement, Fragment } from "react";
-import { renderToString } from "react-dom/server";
-
 // Parse --project-root from CLI args
 function parseProjectRoot(): string {
   const args = Bun.argv;
@@ -13,6 +10,16 @@ function parseProjectRoot(): string {
 }
 
 const projectRoot = parseProjectRoot();
+
+// Resolve React from the project's node_modules to ensure a single React instance.
+// The sidecar lives in the framework directory, but components live in the project
+// directory. If each resolves "react" relative to its own location, we get two copies
+// and hooks break. Using require.resolve with the project path ensures both sides
+// use the same React.
+const reactPath = require.resolve("react", { paths: [projectRoot] });
+const reactDomServerPath = require.resolve("react-dom/server", { paths: [projectRoot] });
+const { createElement, Fragment } = await import(reactPath);
+const { renderToString } = await import(reactDomServerPath);
 
 // Module cache: component path -> module
 const moduleCache = new Map<string, any>();
