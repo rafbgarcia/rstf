@@ -35,22 +35,28 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`"encoding/json"`,
 		`"fmt"`,
 		`"net/http"`,
+		`"strings"`,
 		`rstf "github.com/rafbgarcia/rstf"`,
 		`"github.com/rafbgarcia/rstf/internal/renderer"`,
 		`app "github.com/user/myapp"`,
 		`dashboard "github.com/user/myapp/routes/dashboard"`,
 		"func structToMap(v any) map[string]any {",
+		"func assemblePage(html string, serverData map[string]map[string]any, bundlePath string) string {",
+		"window.__RSTF_SERVER_DATA__",
 		"func main() {",
 		"r := renderer.New()",
 		`r.Start(".")`,
+		`http.Handle("GET /.rstf/static/"`,
 		`http.HandleFunc("GET /dashboard"`,
 		"ctx := rstf.NewContext(req)",
 		`"main": structToMap(app.SSR(ctx))`,
 		`"routes/dashboard": structToMap(dashboard.SSR(ctx))`,
+		"sd := map[string]map[string]any{",
+		"ServerData: sd,",
 		`Component: "routes/dashboard"`,
 		`Layout:    "main"`,
 		`http.Error(w, err.Error(), 500)`,
-		"fmt.Fprint(w, html)",
+		`assemblePage(html, sd, "/.rstf/static/dashboard/bundle.js")`,
 		`http.ListenAndServe(":3000", nil)`,
 	}
 
@@ -117,6 +123,18 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 	idxUser := strings.Index(got, `"GET /users/{id}/edit"`)
 	if idxRoot >= idxDash || idxDash >= idxUser {
 		t.Errorf("routes not sorted by URL pattern: / at %d, /dashboard at %d, /users/{id}/edit at %d", idxRoot, idxDash, idxUser)
+	}
+
+	// Verify bundle paths.
+	bundleExpectations := []string{
+		`"/.rstf/static/index/bundle.js"`,
+		`"/.rstf/static/dashboard/bundle.js"`,
+		`"/.rstf/static/users-id-edit/bundle.js"`,
+	}
+	for _, exp := range bundleExpectations {
+		if !strings.Contains(got, exp) {
+			t.Errorf("output missing bundle path %q\n\nFull output:\n%s", exp, got)
+		}
 	}
 }
 
@@ -297,7 +315,7 @@ func TestGenerateServer_NoLayout(t *testing.T) {
 	if strings.Contains(got, `app "github.com/user/myapp"`) {
 		t.Errorf("should not have layout import\n\nFull output:\n%s", got)
 	}
-	if strings.Contains(got, `"main":`) {
+	if strings.Contains(got, `"main": structToMap`) {
 		t.Errorf("should not have layout ServerData entry\n\nFull output:\n%s", got)
 	}
 }

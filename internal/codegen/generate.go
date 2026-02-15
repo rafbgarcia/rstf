@@ -9,40 +9,46 @@ import (
 	"github.com/rafbgarcia/rstf/internal/conventions"
 )
 
+// GenerateResult holds the output of a codegen run.
+type GenerateResult struct {
+	RouteCount int
+	Entries    map[string]string // routeDir -> absolute path to .entry.tsx
+}
+
 // Generate runs the full codegen pipeline for a project. It removes any
 // existing .rstf/ output, parses Go route files, analyzes TSX dependencies,
-// and writes all generated files (.d.ts, runtime modules, server_gen.go).
-//
-// Returns the number of routes generated.
-func Generate(projectRoot string) (int, error) {
+// and writes all generated files (.d.ts, runtime modules, hydration entries,
+// server_gen.go).
+func Generate(projectRoot string) (GenerateResult, error) {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
-		return 0, fmt.Errorf("resolving project root: %w", err)
+		return GenerateResult{}, fmt.Errorf("resolving project root: %w", err)
 	}
 
 	// 1. Clean slate — remove .rstf/ since everything in it is generated.
 	rstfDir := filepath.Join(absRoot, ".rstf")
 	if err := os.RemoveAll(rstfDir); err != nil {
-		return 0, fmt.Errorf("removing .rstf/: %w", err)
+		return GenerateResult{}, fmt.Errorf("removing .rstf/: %w", err)
 	}
 
 	// 2. Read module path from go.mod.
 	goModContent, err := os.ReadFile(filepath.Join(absRoot, "go.mod"))
 	if err != nil {
-		return 0, fmt.Errorf("reading go.mod: %w", err)
+		return GenerateResult{}, fmt.Errorf("reading go.mod: %w", err)
 	}
 	modulePath := ParseModulePath(goModContent)
 	if modulePath == "" {
-		return 0, fmt.Errorf("no module directive found in go.mod")
+		return GenerateResult{}, fmt.Errorf("no module directive found in go.mod")
 	}
 
 	// 3. Parse all Go route files.
 	files, err := ParseDir(absRoot)
 	if err != nil {
-		return 0, fmt.Errorf("parsing project: %w", err)
+		return GenerateResult{}, fmt.Errorf("parsing project: %w", err)
 	}
 
 	// 4. Analyze TSX dependencies for each route directory.
+	// Also discover TSX-only routes (no .go file but has index.tsx).
 	deps := map[string][]string{}
 	for _, f := range files {
 		if !conventions.IsRouteDir(f.Dir) {
@@ -55,18 +61,36 @@ func Generate(projectRoot string) (int, error) {
 		}
 		d, err := AnalyzeDeps(absRoot, entryPath)
 		if err != nil {
-			return 0, fmt.Errorf("analyzing deps for %s: %w", f.Dir, err)
+			return GenerateResult{}, fmt.Errorf("analyzing deps for %s: %w", f.Dir, err)
 		}
 		deps[f.Dir] = d
+	}
+
+	// Also check for TSX-only route dirs that weren't discovered via ParseDir.
+	tsxRouteDirs, err := discoverTSXRouteDirs(absRoot)
+	if err != nil {
+		return GenerateResult{}, fmt.Errorf("discovering TSX routes: %w", err)
+	}
+	for _, routeDir := range tsxRouteDirs {
+		if _, exists := deps[routeDir]; exists {
+			continue
+		}
+		entryPath := filepath.Join(routeDir, "index.tsx")
+		d, err := AnalyzeDeps(absRoot, entryPath)
+		if err != nil {
+			return GenerateResult{}, fmt.Errorf("analyzing deps for %s: %w", routeDir, err)
+		}
+		deps[routeDir] = d
 	}
 
 	// 5. Create .rstf/ directory structure.
 	for _, dir := range []string{
 		filepath.Join(rstfDir, "types"),
 		filepath.Join(rstfDir, "generated"),
+		filepath.Join(rstfDir, "entries"),
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return 0, fmt.Errorf("creating %s: %w", dir, err)
+			return GenerateResult{}, fmt.Errorf("creating %s: %w", dir, err)
 		}
 	}
 
@@ -77,41 +101,91 @@ func Generate(projectRoot string) (int, error) {
 		dtsPath := filepath.Join(rstfDir, "types", dtsName)
 		dts := GenerateDTS(rf)
 		if err := os.WriteFile(dtsPath, []byte(dts), 0644); err != nil {
-			return 0, fmt.Errorf("writing %s: %w", dtsPath, err)
+			return GenerateResult{}, fmt.Errorf("writing %s: %w", dtsPath, err)
 		}
 
 		// Write runtime module.
-		rtMod := GenerateRuntimeModule(rf)
+		rtMod := GenerateRuntimeModule(rf, componentPathForDir(rf.Dir))
 		if rtMod != "" {
 			rtPath := filepath.Join(rstfDir, "generated", runtimeModulePath(rf.Dir))
 			if err := os.MkdirAll(filepath.Dir(rtPath), 0755); err != nil {
-				return 0, fmt.Errorf("creating dir for %s: %w", rtPath, err)
+				return GenerateResult{}, fmt.Errorf("creating dir for %s: %w", rtPath, err)
 			}
 			if err := os.WriteFile(rtPath, []byte(rtMod), 0644); err != nil {
-				return 0, fmt.Errorf("writing %s: %w", rtPath, err)
+				return GenerateResult{}, fmt.Errorf("writing %s: %w", rtPath, err)
 			}
 		}
 	}
 
-	// 7. Generate server_gen.go.
+	// 7. Generate hydration entries for each route.
+	entries := map[string]string{}
+	for routeDir, routeDeps := range deps {
+		if !conventions.IsRouteDir(routeDir) {
+			continue
+		}
+		entryContent := GenerateHydrationEntry(routeDir, routeDeps)
+		entryPath := filepath.Join(rstfDir, "entries", entryFileName(routeDir))
+		if err := os.WriteFile(entryPath, []byte(entryContent), 0644); err != nil {
+			return GenerateResult{}, fmt.Errorf("writing entry %s: %w", entryPath, err)
+		}
+		entries[routeDir] = entryPath
+	}
+
+	// 8. Generate server_gen.go.
 	serverCode, err := GenerateServer(modulePath, files, deps)
 	if err != nil {
-		return 0, fmt.Errorf("generating server: %w", err)
+		return GenerateResult{}, fmt.Errorf("generating server: %w", err)
 	}
 	serverPath := filepath.Join(rstfDir, "server_gen.go")
 	if err := os.WriteFile(serverPath, []byte(serverCode), 0644); err != nil {
-		return 0, fmt.Errorf("writing server_gen.go: %w", err)
+		return GenerateResult{}, fmt.Errorf("writing server_gen.go: %w", err)
 	}
 
 	// Count routes.
 	routeCount := 0
+	routeSet := map[string]bool{}
 	for _, f := range files {
 		if conventions.IsRouteDir(f.Dir) {
+			routeSet[f.Dir] = true
+			routeCount++
+		}
+	}
+	for routeDir := range deps {
+		if !routeSet[routeDir] && conventions.IsRouteDir(routeDir) {
 			routeCount++
 		}
 	}
 
-	return routeCount, nil
+	return GenerateResult{
+		RouteCount: routeCount,
+		Entries:    entries,
+	}, nil
+}
+
+// discoverTSXRouteDirs finds route directories that have index.tsx but might
+// not have been discovered by ParseDir (because they lack .go files).
+func discoverTSXRouteDirs(absRoot string) ([]string, error) {
+	routesDir := filepath.Join(absRoot, "routes")
+	if _, err := os.Stat(routesDir); os.IsNotExist(err) {
+		return nil, nil
+	}
+
+	entries, err := os.ReadDir(routesDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var dirs []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		tsxPath := filepath.Join(routesDir, e.Name(), "index.tsx")
+		if _, err := os.Stat(tsxPath); err == nil {
+			dirs = append(dirs, filepath.ToSlash(filepath.Join("routes", e.Name())))
+		}
+	}
+	return dirs, nil
 }
 
 // dtsFileName returns the .d.ts filename for a given directory path.
@@ -141,4 +215,16 @@ func runtimeModulePath(dir string) string {
 		return "main.ts"
 	}
 	return dir + ".ts"
+}
+
+// componentPathForDir returns the key used in __RSTF_SERVER_DATA__.
+//
+//	"."                       → "main"
+//	"routes/dashboard"        → "routes/dashboard"
+//	"shared/ui/user-avatar"   → "shared/ui/user-avatar"
+func componentPathForDir(dir string) string {
+	if dir == "." {
+		return "main"
+	}
+	return dir
 }

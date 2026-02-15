@@ -70,21 +70,21 @@ export function View({ children }: { children: ReactNode }) {
 
 The sidecar renders `<Layout><Route /></Layout>` — single render tree, single hydration root.
 
-## Client-side: Hydration (not yet implemented)
+## Client-side: Hydration
 
-After the server sends HTML, the browser hydrates it — React attaches event handlers and state to the existing DOM. This section describes the planned hydration design. None of the hydration code (entry generation, bundling, page assembly) is implemented yet.
+After the server sends HTML, the browser hydrates it — React attaches event handlers and state to the existing DOM.
 
 ### How hydration works
 
-The caller of `Renderer.Render` (not the renderer itself) will be responsible for assembling the full HTML page. This includes:
+The generated `server_gen.go` calls `assemblePage()` after rendering to assemble the full HTML page. This includes:
 
 1. Prepending `<!DOCTYPE html>` to the rendered HTML.
 2. Injecting `<script>window.__RSTF_SERVER_DATA__ = {...}</script>` before `</body>`.
 3. Injecting the hydration bundle `<script src="..."></script>` before `</body>`.
 
-### Generated hydration entry (not yet implemented)
+### Generated hydration entry
 
-For each SSR route, the framework will generate a hydration entry file:
+For each SSR route, the framework generates a hydration entry file:
 
 ```typescript
 // Generated: .rstf/entries/dashboard.entry.tsx
@@ -108,11 +108,11 @@ hydrateRoot(
 
 These are bundled by Bun into `.rstf/static/{route}/bundle.js`.
 
-### Client-side initialization of generated modules (not yet implemented)
+### Client-side initialization of generated modules
 
-On the client, generated modules will initialize `_data` from `window.__RSTF_SERVER_DATA__` at import time (instead of waiting for `__setServerData()`). The codegen will produce a dual-mode version of the generated module (see `internal/codegen/codegen-spec.md` for the current server-side format) that detects the environment via `typeof window === "undefined"`.
+On the client, generated modules initialize `_data` from `window.__RSTF_SERVER_DATA__` at import time (instead of waiting for `__setServerData()`). The codegen produces a dual-mode version of the generated module (see `internal/codegen/codegen-spec.md` for the module format) that detects the environment via `typeof window !== "undefined"`.
 
-On the server, `_data` starts as an empty object and is set by the sidecar before rendering. On the client, `_data` will be initialized from the serialized data embedded in the HTML. Either way, `serverData()` reads from `_data` at call time, returning the current request's values.
+On the server, `_data` starts as an empty object and is set by the sidecar before rendering. On the client, `_data` is initialized from the serialized data embedded in the HTML. Either way, `serverData()` reads from `_data` at call time, returning the current request's values.
 
 ### Hydration sequence
 

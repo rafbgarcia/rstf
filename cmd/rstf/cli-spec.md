@@ -33,15 +33,16 @@ Starts the development server.
 
 #### Startup sequence (current MVP)
 
-1. **Run codegen** (`codegen.Generate(".")`) — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` runtime modules, and `.rstf/server_gen.go`.
-2. **Start Go HTTP server** — `go run ./.rstf/server_gen.go`, which itself starts the Bun sidecar and listens on `:3000`.
+1. **Run codegen** (`codegen.Generate(".")`) — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` dual-mode runtime modules, `.rstf/entries/{name}.entry.tsx` hydration entries, and `.rstf/server_gen.go`.
+2. **Bundle client JS** — for each SSR route, run `bun build` on the hydration entry to produce `.rstf/static/{name}/bundle.js`.
+3. **Start Go HTTP server** — `go run ./.rstf/server_gen.go`, which itself starts the Bun sidecar and listens on `:3000`. The generated server serves static bundles from `/.rstf/static/` and assembles full HTML pages with `<!DOCTYPE html>`, server data injection, and bundle script tags.
 
 #### Startup sequence (planned)
 
-Steps 2-5 below are not yet implemented — the current MVP delegates sidecar management to the generated server.
+Steps 3-5 below are not yet implemented — the current MVP delegates sidecar management to the generated server.
 
 1. **Run codegen** — same as above.
-2. **Bundle client JS** — for each SSR route, generate hydration entry and bundle with Bun into `.rstf/static/{route}/bundle.js`.
+2. **Bundle client JS** — same as above.
 3. **Start Bun sidecar** — launch `runtime/ssr.ts` as a child process, read port from stdout.
 4. **Start Go HTTP server** — compile and run `.rstf/server_gen.go`, listening on `:3000`.
 5. **Start file watcher** — watch for changes (see `internal/watcher/watcher-spec.md`).
@@ -72,6 +73,7 @@ Planned:
 ```
 rstf dev
   Codegen ......... done (2 routes)
+  Client bundles .. done
   HTTP server ..... starting on :3000
 ```
 

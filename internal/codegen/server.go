@@ -104,6 +104,7 @@ func GenerateServer(modulePath string, files []RouteFile, deps map[string][]stri
 	writeHeader(&b)
 	writeImports(&b, imports)
 	writeStructToMap(&b)
+	writeAssemblePage(&b)
 	writeMain(&b, routes, layout, hasLayout, aliasMap, deps)
 
 	return b.String(), nil
@@ -191,6 +192,7 @@ func writeImports(b *strings.Builder, imports []serverImport) {
 	b.WriteString("\t\"encoding/json\"\n")
 	b.WriteString("\t\"fmt\"\n")
 	b.WriteString("\t\"net/http\"\n")
+	b.WriteString("\t\"strings\"\n")
 	b.WriteString("\n")
 	// Framework.
 	fmt.Fprintf(b, "\trstf %q\n", frameworkModule)
@@ -213,6 +215,17 @@ func writeStructToMap(b *strings.Builder) {
 	b.WriteString("\n\n")
 }
 
+func writeAssemblePage(b *strings.Builder) {
+	b.WriteString(`func assemblePage(html string, serverData map[string]map[string]any, bundlePath string) string {
+	sdJSON, _ := json.Marshal(serverData)
+	dataScript := "<script>window.__RSTF_SERVER_DATA__ = " + string(sdJSON) + "</script>"
+	bundleScript := "<script src=\"" + bundlePath + "\"></script>"
+	page := "<!DOCTYPE html>" + strings.Replace(html, "</body>", dataScript+bundleScript+"</body>", 1)
+	return page
+}`)
+	b.WriteString("\n\n")
+}
+
 func writeMain(
 	b *strings.Builder,
 	routes []routeEntry,
@@ -224,6 +237,10 @@ func writeMain(
 	b.WriteString("func main() {\n")
 	b.WriteString("\tr := renderer.New()\n")
 	b.WriteString("\tr.Start(\".\")\n")
+
+	// Static file serving for client bundles.
+	b.WriteString("\n")
+	b.WriteString("\thttp.Handle(\"GET /.rstf/static/\", http.StripPrefix(\"/.rstf/static/\", http.FileServer(http.Dir(\".rstf/static\"))))\n")
 
 	for _, route := range routes {
 		b.WriteString("\n")
@@ -261,16 +278,19 @@ func writeMain(
 			})
 		}
 
+		// Build the serverData map variable.
+		b.WriteString("\t\tsd := map[string]map[string]any{\n")
+		for _, e := range entries {
+			fmt.Fprintf(b, "\t\t\t%q: %s,\n", e.key, e.call)
+		}
+		b.WriteString("\t\t}\n\n")
+
 		fmt.Fprintf(b, "\t\thtml, err := r.Render(renderer.RenderRequest{\n")
 		fmt.Fprintf(b, "\t\t\tComponent: %q,\n", route.dir)
 		fmt.Fprintf(b, "\t\t\tLayout:    \"main\",\n")
 
 		if len(entries) > 0 {
-			b.WriteString("\t\t\tServerData: map[string]map[string]any{\n")
-			for _, e := range entries {
-				fmt.Fprintf(b, "\t\t\t\t%q: %s,\n", e.key, e.call)
-			}
-			b.WriteString("\t\t\t},\n")
+			b.WriteString("\t\t\tServerData: sd,\n")
 		}
 
 		b.WriteString("\t\t})\n")
@@ -278,7 +298,7 @@ func writeMain(
 		b.WriteString("\t\t\thttp.Error(w, err.Error(), 500)\n")
 		b.WriteString("\t\t\treturn\n")
 		b.WriteString("\t\t}\n")
-		b.WriteString("\t\tfmt.Fprint(w, html)\n")
+		fmt.Fprintf(b, "\t\tfmt.Fprint(w, assemblePage(html, sd, %q))\n", bundlePath(route.dir))
 		b.WriteString("\t})\n")
 	}
 
