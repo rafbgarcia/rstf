@@ -118,11 +118,18 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 		`http.HandleFunc("GET /"`,
 		`http.HandleFunc("GET /dashboard"`,
 		`http.HandleFunc("GET /users/{id}/edit"`,
+		// Dynamic route should use .rstf/pkgs/ symlink path ($ stripped).
+		`useredit "github.com/user/myapp/.rstf/pkgs/routes/users.id.edit"`,
 	}
 	for _, exp := range expectations {
 		if !strings.Contains(got, exp) {
 			t.Errorf("output missing %q\n\nFull output:\n%s", exp, got)
 		}
+	}
+
+	// Non-dynamic routes should NOT use the pkgs path.
+	if strings.Contains(got, `.rstf/pkgs/routes/dashboard`) {
+		t.Errorf("non-dynamic route should not use .rstf/pkgs path\n\nFull output:\n%s", got)
 	}
 
 	// Verify routes are sorted: / comes before /dashboard comes before /users/{id}/edit.

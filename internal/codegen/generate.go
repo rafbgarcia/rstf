@@ -94,7 +94,24 @@ func Generate(projectRoot string) (GenerateResult, error) {
 		}
 	}
 
-	// 6. Generate DTS and runtime modules for each RouteFile.
+	// 6. Create symlinks for directories with $ (dynamic segments).
+	// Go rejects $ in import paths, so we create .rstf/pkgs/<sanitized>/
+	// pointing to the real directory, and server_gen.go imports that path.
+	for _, f := range files {
+		if !strings.Contains(f.Dir, "$") || f.Dir == "." {
+			continue
+		}
+		sanitized := strings.ReplaceAll(f.Dir, "$", "")
+		linkPath := filepath.Join(rstfDir, "pkgs", sanitized)
+		if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
+			return GenerateResult{}, fmt.Errorf("creating symlink parent for %s: %w", f.Dir, err)
+		}
+		if err := os.Symlink(filepath.Join(absRoot, f.Dir), linkPath); err != nil {
+			return GenerateResult{}, fmt.Errorf("creating symlink for %s: %w", f.Dir, err)
+		}
+	}
+
+	// 7. Generate DTS and runtime modules for each RouteFile.
 	for _, rf := range files {
 		// Write .d.ts file.
 		dtsName := dtsFileName(rf.Dir)
@@ -117,7 +134,7 @@ func Generate(projectRoot string) (GenerateResult, error) {
 		}
 	}
 
-	// 7. Generate hydration entries for each route.
+	// 8. Generate hydration entries for each route.
 	entries := map[string]string{}
 	for routeDir, routeDeps := range deps {
 		if !conventions.IsRouteDir(routeDir) {
@@ -131,7 +148,7 @@ func Generate(projectRoot string) (GenerateResult, error) {
 		entries[routeDir] = entryPath
 	}
 
-	// 8. Generate server_gen.go.
+	// 9. Generate server_gen.go.
 	serverCode, err := GenerateServer(modulePath, files, deps)
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("generating server: %w", err)

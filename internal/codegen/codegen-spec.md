@@ -124,6 +124,7 @@ The generated server declares `package main` with `func main()`, imports the use
 - `ServerData` in render requests is keyed by component path (e.g. `"routes/dashboard"`). See `renderer/renderer-spec.md`.
 - The server accepts `--port` flag (default `3000`), handles graceful shutdown (SIGINT/SIGTERM), and serves `.rstf/static/` for hydration bundles.
 - Page assembly: wraps rendered HTML with `<!DOCTYPE html>`, injects `__RSTF_SERVER_DATA__` script and hydration bundle script before `</body>`.
+- Directories with `$` (dynamic segments) cannot be used directly as Go import paths. Codegen creates symlinks under `.rstf/pkgs/` with `$` stripped (e.g. `.rstf/pkgs/routes/sites.id` → `routes/sites.$id`) and imports those paths instead.
 
 ## Generation pipeline
 
@@ -131,6 +132,7 @@ The generated server declares `package main` with `func main()`, imports the use
 2. Read module path from `go.mod`
 3. Discover all Go files with `SSR` functions via AST parsing (skips `.rstf/`)
 4. Analyze TSX import dependencies per route
-5. Write `.d.ts` types and runtime modules for each component
-6. Generate hydration entry files (`.rstf/entries/`)
-7. Generate `server_gen.go`
+5. Create symlinks for directories with `$` in their names (see Server generation)
+6. Write `.d.ts` types and runtime modules for each component
+7. Generate hydration entry files (`.rstf/entries/`)
+8. Generate `server_gen.go`

@@ -140,6 +140,11 @@ func collectImports(
 		if dir == "." {
 			importPath = modulePath
 			baseAlias = "app"
+		} else if strings.Contains(dir, "$") {
+			// $ is not valid in Go import paths. The codegen pipeline creates
+			// symlinks under .rstf/pkgs/ with $ stripped so Go can import them.
+			importPath = modulePath + "/.rstf/pkgs/" + strings.ReplaceAll(dir, "$", "")
+			baseAlias = rf.Package
 		} else {
 			importPath = modulePath + "/" + dir
 			baseAlias = rf.Package
