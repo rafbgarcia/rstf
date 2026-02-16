@@ -1,4 +1,4 @@
-package basic
+package testproject
 
 import rstf "github.com/rafbgarcia/rstf"
 
