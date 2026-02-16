@@ -10,17 +10,7 @@ The CLI (`rstf dev`) orchestrates codegen and starts the server. `rstf init` and
 
 ## Understanding the codebase
 
-Read `ARCHITECTURE.md` for a high-level overview of all components and how they connect, including a request flow diagram.
-
-Key modules:
-
-- `internal/codegen/` — Parses Go AST, generates TypeScript types (`.d.ts`), runtime modules (`serverData()` + `__setServerData()`), and server entry point (`.rstf/server_gen.go`)
-- `renderer/` — Go client + Bun sidecar for SSR via `renderToString`
-- `internal/conventions/` — File conventions, route path resolution rules
-- `internal/watcher/` — File change monitoring for live reload (not yet implemented)
-- `cmd/rstf/` — CLI entry point: `dev` is implemented; `init` and `build` are not yet implemented
-- `runtime/ssr.ts` — Bun HTTP server that executes React SSR
-- `context.go`, `logger.go` — Request-scoped context and structured logging
+See `ARCHITECTURE.md` for a request flow diagram showing how all components connect.
 
 ## Design philosophy
 
@@ -43,19 +33,31 @@ Key modules:
 
 ## Specification-driven development
 
-This project uses `*-spec.md` files co-located with their modules as the source of truth.
+This project uses `*-spec.md` files co-located with their modules. Specs enable design-level review — teammates review spec diffs instead of code diffs.
+
 Search for `*-spec.md` to find all specifications.
 
-**Rules for spec files:**
+**What specs document:**
 
-- Each spec documents how its own component works — it must not duplicate information from other specs.
-- When a spec needs to reference a concept owned by another spec, it cross-references with a "see `path/to/other-spec.md`" link.
-- Specs document the current state of the code. Planned/unimplemented features must be clearly marked as such.
+- Contracts between modules (request/response formats, expected inputs/outputs)
+- Rules, constraints, and invariants (e.g. "SSR must return a single struct")
+- Design rationale — the "why" behind non-obvious decisions
+- Generated output formats — what codegen should produce
+
+**What specs do NOT document:**
+
+- Step-by-step descriptions of what code does — that's what the code is for
+- Go/TypeScript interface definitions that are already in the source — tests verify correctness
+- Full code examples that mirror the implementation
+
+**Rules:**
+
+- Each spec documents its own module only — no duplication across specs.
+- Cross-reference other specs with "see `path/to/other-spec.md`" links.
+- Keep specs concise: a spec diff should be reviewable at a glance.
 
 **Workflow for any code change:**
 
 1. Read the relevant spec(s) first.
-2. Update the spec to reflect the intended change.
-3. Implement the code to match the spec.
-
-Note: if code and spec disagree, the code must be updated to match the spec.
+2. Implement the code changes.
+3. Update the relevant spec(s), if any.

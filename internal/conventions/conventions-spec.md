@@ -4,13 +4,13 @@
 
 The conventions module defines the file conventions and rules that map the project's directory structure to HTTP routes. See `internal/codegen/codegen-spec.md` for how these conventions are used to generate the server entry point (`.rstf/server_gen.go`).
 
-For the overall project structure (where `main.go`, `routes/`, `shared/` live), see `ARCHITECTURE.md`.
+For how these conventions fit into the request flow, see `ARCHITECTURE.md`.
 
 ## File conventions
 
 ### Layout (`main.go` + `main.tsx`)
 
-`main.go` provides layout-level server data (e.g. session, auth) available to `main.tsx` on every request. It uses the app's package name derived from `go.mod`.
+`main.go` provides layout-level server data (e.g. session, auth) available to `main.tsx` on every request. **It must NOT use `package main`** — it uses the app's package name derived from `go.mod` (e.g. `package myapp`), making it importable by the generated `.rstf/server_gen.go` (which declares `package main` and contains `func main()`). Go prohibits importing `package main`, but any other package name works.
 
 `main.tsx` is the root React component. It wraps all route components via `children` and can switch between layouts based on the server data (e.g. logged-in vs logged-out).
 

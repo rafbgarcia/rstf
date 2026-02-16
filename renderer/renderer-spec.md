@@ -2,177 +2,53 @@
 
 ## Overview
 
-The SSR renderer turns a React component tree into an HTML string on the server. It is a low-level primitive — no HTML shell, no hydration scripts. Page assembly is the caller's responsibility.
+The SSR renderer turns a React component tree into an HTML string on the server. It consists of:
 
-It consists of two parts:
+1. **Bun sidecar** (`runtime/ssr.ts`) — HTTP server running in Bun that executes `renderToString`
+2. **Go renderer client** (`renderer/renderer.go`) — manages the sidecar process and sends render requests
 
-1. **Bun sidecar** — a small HTTP server running in a Bun process that executes `renderToString`
-2. **Go renderer client** — manages the sidecar process and sends render requests
+The renderer returns raw component HTML only — no HTML shell, no hydration scripts. Page assembly (DOCTYPE, script injection) is the caller's responsibility.
 
-## Server data model
+## Render request contract
 
-The render request carries a `serverData` map keyed by component path. Before rendering, the sidecar imports each component's generated module and calls `__setServerData(data)`. See `internal/codegen/codegen-spec.md` for the generated module format and `runtime/runtime-spec.md` for how components consume server data.
+The Go client sends `POST /render` to the sidecar with:
 
-## Bun sidecar (`runtime/ssr.ts`)
+- `component` (required) — route component path relative to project root (e.g. `"routes/dashboard"`)
+- `layout` (required) — layout component path (e.g. `"main"`)
+- `serverData` (optional) — per-component data, keyed by component path. Keys and values come from Go structs serialized via `json.Marshal`.
 
-A Bun HTTP server that accepts render requests and returns HTML strings.
+The sidecar returns `{"html": "..."}` on success, or HTTP 500 with `{"error": "..."}` on failure.
 
-### Request format
+## Component resolution
 
-```
-POST http://localhost:{port}/render
-Content-Type: application/json
+Component paths are **directory paths**. The sidecar resolves them using the folder convention (see `internal/conventions/conventions-spec.md`):
 
-{
-  "component": "routes/dashboard",
-  "layout": "main",
-  "serverData": {
-    "main": {
-      "session": {"isLoggedIn": true, "user": {"name": "Rafa"}}
-    },
-    "routes/dashboard": {
-      "posts": [{"title": "Hello", "published": true}],
-      "author": {"name": "Rafa", "email": "rafa@example.com"}
-    },
-    "shared/ui/user-avatar": {
-      "userName": "Rafa",
-      "avatarUrl": "/avatars/rafa.jpg"
-    }
-  }
-}
-```
+- Route/shared components: `"routes/dashboard"` → `{project-root}/routes/dashboard/index.tsx`
+- Layout: `"main"` → `{project-root}/main.tsx`
 
-The keys within each component's data come from the Go struct's `json` tags. The Go handler calls `json.Marshal` on the `SSR()` return value, so the serialization format is determined by the struct definition.
+The project root is passed as a CLI argument: `bun run runtime/ssr.ts --project-root /path/to/app`.
 
-Fields:
-- `component` (required) — path to the route component, relative to project root
-- `layout` (required) — path to the layout component, relative to project root
-- `serverData` (optional) — per-component server data, keyed by component path
+## Render sequence
 
-### What it does
+1. For each key in `serverData`, import the generated module at `.rstf/generated/{key}.ts` and call `__setServerData(data)`. Skip if no module exists.
+2. Import the layout and route component modules.
+3. Render `<Layout><Route /></Layout>` via `renderToString()`.
 
-1. Receives the component path, layout, and server data.
-2. For each key in `serverData`, imports the generated module at `{projectRoot}/.rstf/generated/{key}.ts` and calls `__setServerData(data)`. Skips gracefully if no generated module exists.
-3. Imports the layout component module (e.g. `main.tsx`).
-4. Imports the route component module (e.g. `routes/dashboard.tsx`).
-5. Renders `<Layout><Route /></Layout>` via `ReactDOMServer.renderToString()`.
-6. Returns the HTML string.
+## Concurrency safety
 
-The layout component receives the route as standard React `children`. No special imports or `dangerouslySetInnerHTML` — the framework handles composition at the render level.
+`__setServerData` mutates a module-level variable. This is safe because `renderToString` is synchronous and Bun runs a single-threaded event loop. **Critical rule: no `await` between `__setServerData` and `renderToString`.** All async work (dynamic `import()` calls) must complete before the synchronous set-then-render block.
 
-### Concurrency safety
+## Sidecar lifecycle
 
-`__setServerData` mutates a module-level `_data` variable. If two requests interleave — request A sets data, request B sets data, request A renders — request A's `serverData()` calls would return B's data.
+**Start:** The Go renderer spawns `bun run runtime/ssr.ts`. The sidecar listens on a random port and prints the port to stdout. The Go side reads it (10-second timeout).
 
-This is safe as long as there is **no `await` between `__setServerData` and `renderToString`**. Since `renderToString` is synchronous and Bun runs on a single-threaded event loop, a synchronous set-then-render block cannot be interrupted by another request.
+**Stop:** Go sends SIGINT to the Bun process and waits for exit.
 
-The request handler must resolve all async work (dynamic `import()` calls) **before** entering the synchronous set-then-render block:
-
-```ts
-// 1. Async phase: resolve all imports
-const modules = await Promise.all(
-  entries.map(([path]) => import(`.../${path}.ts`))
-);
-// 2. Synchronous phase: set data + render (no await — cannot be interrupted)
-for (let i = 0; i < entries.length; i++) {
-  modules[i].__setServerData(entries[i][1]);
-}
-const html = renderToString(createElement(Layout, null, createElement(Route)));
-```
-
-### Response format
-
-```json
-{
-  "html": "<html><body>...</body></html>"
-}
-```
-
-### Error handling
-
-If rendering fails, the sidecar returns a 500 with:
-
-```json
-{
-  "error": "Component not found: routes/dashboard"
-}
-```
-
-### Startup
-
-- The sidecar is started by the Go renderer as a child process.
-- It listens on a random available port and prints the port to stdout.
-- The Go process reads the port from stdout to know where to send requests.
-
-### Component resolution
-
-The sidecar receives the project root as a command-line argument:
-
-```
-bun run runtime/ssr.ts --project-root /path/to/myapp
-```
-
-Component paths in render requests are **directory paths** relative to the project root. The sidecar resolves them to actual files using the folder convention (see `internal/conventions/conventions-spec.md`):
-
-- **Route components** use `index.tsx` inside the directory: `"routes/dashboard"` → `{project-root}/routes/dashboard/index.tsx`
-- **Shared components** also use `index.tsx`: `"shared/ui/user-avatar"` → `{project-root}/shared/ui/user-avatar/index.tsx`
-- **Layout** is a root-level file: `"main"` → `{project-root}/main.tsx`
-
-The sidecar uses Bun's standard module resolution (`import()`) which resolves directory paths to `index.tsx` automatically. Since both routes and shared components use the `index.tsx` convention, no special resolution logic is needed.
-
-### Module cache
-
-The sidecar caches imported modules for performance. A `POST /invalidate` endpoint clears both the component module cache and the generated module cache — called by the file watcher when files change during development.
-
-## Go renderer client (`renderer/renderer.go`)
-
-The Go side manages the Bun sidecar process and sends render requests.
-
-### Interface
-
-```go
-type Renderer struct {
-    port int
-    cmd  *exec.Cmd
-}
-
-type RenderRequest struct {
-    Component  string                    // route component path (required)
-    Layout     string                    // layout component path (required)
-    ServerData map[string]map[string]any // per-component server data, keyed by component path
-}
-
-func New() *Renderer
-func (r *Renderer) Start(projectRoot string) error
-func (r *Renderer) Stop() error
-func (r *Renderer) Render(req RenderRequest) (string, error)
-```
-
-### `Render` behavior
-
-1. Serializes the `RenderRequest` to JSON.
-2. Sends a POST request to `http://localhost:{port}/render`.
-3. Receives the HTML string from the sidecar.
-4. Returns the HTML string to the caller.
-
-The renderer returns raw component HTML only. It does not wrap it in a page shell, add hydration scripts, or write to an `http.ResponseWriter`. The caller composes the full page (prepends DOCTYPE, injects script tags before `</body>`).
-
-### `Start` behavior
-
-1. Locates `runtime/ssr.ts` relative to the framework module root.
-2. Spawns `bun run runtime/ssr.ts --project-root {projectRoot}`.
-3. Reads the port number from the first line of stdout.
-4. Stores the port for subsequent render requests.
-5. Times out after 10 seconds if no port is received.
-
-### `Stop` behavior
-
-1. Sends SIGINT to the Bun process.
-2. Waits for the process to exit.
+**Cache:** The sidecar caches imported modules for performance. A `POST /invalidate` endpoint clears all caches — called by the file watcher during development.
 
 ## Why Bun (not embedded V8)
 
-- Full React/JSX compatibility — no gaps in API support.
+- Full React/JSX compatibility with no API gaps.
 - No CGO dependency — keeps the Go build simple.
 - Fast startup (~10ms) and built-in TypeScript/JSX transpilation.
-- Can be swapped for Node or Deno later without changing the Go side.
+- Can be swapped for Node or Deno without changing the Go side.
