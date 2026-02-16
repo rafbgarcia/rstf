@@ -4,17 +4,17 @@ The `runtime/` directory contains the JavaScript/TypeScript code that runs outsi
 
 ## Server-side: SSR sidecar (`runtime/ssr.ts`)
 
-A Bun HTTP server that the Go renderer communicates with. See `internal/renderer/renderer-spec.md` for the full protocol (request/response format, startup, component resolution, concurrency model, and module caching).
+A Bun HTTP server that the Go renderer communicates with. See `renderer/renderer-spec.md` for the full protocol (request/response format, startup, component resolution, concurrency model, and module caching).
 
 ## Server data mechanism
 
-Server data is the bridge between Go handlers and React components. The Go side calls `SSR()` handlers, serializes the returned structs, and sends them to the Bun sidecar which calls `__setServerData()` before rendering (see `internal/codegen/codegen-spec.md` for the full pipeline and generated module format, and `internal/renderer/renderer-spec.md` for the render protocol).
+Server data is the bridge between Go handlers and React components. The Go side calls `SSR()` handlers, serializes the returned structs, and sends them to the Bun sidecar which calls `__setServerData()` before rendering (see `internal/codegen/codegen-spec.md` for the full pipeline and generated module format, and `renderer/renderer-spec.md` for the render protocol).
 
 This section documents how components consume server data at runtime.
 
 ### Why `serverData()` is a function
 
-The generated module is cached by the Bun sidecar across requests. A function call ensures the component reads the current request's data at render time, not stale data from import time. Internally, `__setServerData()` updates the module's `_data` variable before each `renderToString` call. See `internal/renderer/renderer-spec.md` for concurrency safety details.
+The generated module is cached by the Bun sidecar across requests. A function call ensures the component reads the current request's data at render time, not stale data from import time. Internally, `__setServerData()` updates the module's `_data` variable before each `renderToString` call. See `renderer/renderer-spec.md` for concurrency safety details.
 
 ### Scoping
 

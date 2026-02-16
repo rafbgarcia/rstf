@@ -124,7 +124,7 @@ The sidecar uses Bun's standard module resolution (`import()`) which resolves di
 
 The sidecar caches imported modules for performance. A `POST /invalidate` endpoint clears both the component module cache and the generated module cache — called by the file watcher when files change during development.
 
-## Go renderer client (`internal/renderer/renderer.go`)
+## Go renderer client (`renderer/renderer.go`)
 
 The Go side manages the Bun sidecar process and sends render requests.
 

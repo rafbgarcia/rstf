@@ -15,7 +15,7 @@ Read `ARCHITECTURE.md` for a high-level overview of all components and how they 
 Key modules:
 
 - `internal/codegen/` — Parses Go AST, generates TypeScript types (`.d.ts`), runtime modules (`serverData()` + `__setServerData()`), and server entry point (`.rstf/server_gen.go`)
-- `internal/renderer/` — Go client + Bun sidecar for SSR via `renderToString`
+- `renderer/` — Go client + Bun sidecar for SSR via `renderToString`
 - `internal/conventions/` — File conventions, route path resolution rules
 - `internal/watcher/` — File change monitoring for live reload (not yet implemented)
 - `cmd/rstf/` — CLI entry point: `dev` is implemented; `init` and `build` are not yet implemented

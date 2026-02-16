@@ -41,7 +41,7 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`"strings"`,
 		`"syscall"`,
 		`rstf "github.com/rafbgarcia/rstf"`,
-		`"github.com/rafbgarcia/rstf/internal/renderer"`,
+		`"github.com/rafbgarcia/rstf/renderer"`,
 		`app "github.com/user/myapp"`,
 		`dashboard "github.com/user/myapp/routes/dashboard"`,
 		"func structToMap(v any) map[string]any {",

@@ -36,7 +36,7 @@ See `internal/conventions/conventions-spec.md` for file conventions and route pa
 
 **Codegen** (`internal/codegen/`) — Produces all framework-generated files under `.rstf/`. Parses Go route files via AST, extracts `SSR` functions and their return structs, analyzes TypeScript imports for dependencies, and generates three outputs: `.d.ts` type declarations, `.ts` runtime modules (`serverData()` + `__setServerData()`), and `.rstf/server_gen.go` (the Go entry point that wires routes to handlers).
 
-**Renderer** (`internal/renderer/`) — Two parts. The Go client (`renderer.go`) manages a Bun child process and sends HTTP render requests. The Bun sidecar (`runtime/ssr.ts`) receives those requests, calls `__setServerData()` on generated modules, then runs `ReactDOMServer.renderToString()` to produce HTML. The synchronous set-then-render block ensures concurrency safety on Bun's single-threaded event loop.
+**Renderer** (`renderer/`) — Two parts. The Go client (`renderer.go`) manages a Bun child process and sends HTTP render requests. The Bun sidecar (`runtime/ssr.ts`) receives those requests, calls `__setServerData()` on generated modules, then runs `ReactDOMServer.renderToString()` to produce HTML. The synchronous set-then-render block ensures concurrency safety on Bun's single-threaded event loop.
 
 **Conventions** (`internal/conventions/`) — Defines the file conventions and rules that map the `routes/` directory structure to HTTP URL patterns. Each folder is a route, dots in folder names become path segments, `$param` becomes `{param}`. See `internal/codegen/codegen-spec.md` for how these rules are used to generate `.rstf/server_gen.go`.
 
@@ -108,7 +108,7 @@ Each module has a co-located `*-spec.md` file as the source of truth. Each conce
 | Spec                                       | Owns                                                                                                       |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `internal/codegen/codegen-spec.md`         | Go parsing, type mapping, generated module format, `@rstf/` alias, server code generation, `.rstf/` output |
-| `internal/renderer/renderer-spec.md`       | SSR protocol, request/response format, sidecar lifecycle, concurrency model                                |
+| `renderer/renderer-spec.md`       | SSR protocol, request/response format, sidecar lifecycle, concurrency model                                |
 | `internal/conventions/conventions-spec.md` | File conventions, routing rules, route path resolution                                                     |
 | `runtime/runtime-spec.md`                  | Runtime behavior of serverData(), layout composition, hydration (planned)                                  |
 | `internal/watcher/watcher-spec.md`         | File watching, debouncing, rebuild triggers                                                                |

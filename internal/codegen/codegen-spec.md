@@ -263,7 +263,7 @@ import (
     "syscall"
 
     rstf "github.com/rafbgarcia/rstf"
-    "github.com/rafbgarcia/rstf/internal/renderer"
+    "github.com/rafbgarcia/rstf/renderer"
 
     app "github.com/user/myapp"
     routeindex "github.com/user/myapp/routes/index"
@@ -369,7 +369,7 @@ func main() {
 - **Go 1.22+ ServeMux**: Uses method-and-pattern routing (e.g. `"GET /users/{id}/edit"`). See `internal/conventions/conventions-spec.md` for path resolution rules.
 - **Import analysis drives wiring**: Only `.go` files discovered via static import analysis (plus the route's own `.go` and the layout) are called.
 - **Struct to map conversion**: Each `SSR()` returns a single struct. The generated `structToMap` helper converts it via JSON round-trip (`json.Marshal` → `json.Unmarshal`) so the resulting `map[string]any` keys come from the struct's `json` tags — matching the TypeScript field names in the generated modules.
-- **`ServerData` keyed by component path**: Each component's data is stored under its directory path in the `ServerData` map (e.g. `"routes/dashboard"`, `"shared/ui/user-avatar"`). See `internal/renderer/renderer-spec.md` for how the sidecar resolves these paths to actual files.
+- **`ServerData` keyed by component path**: Each component's data is stored under its directory path in the `ServerData` map (e.g. `"routes/dashboard"`, `"shared/ui/user-avatar"`). See `renderer/renderer-spec.md` for how the sidecar resolves these paths to actual files.
 - **`--port` flag**: The generated server accepts `--port` (default `3000`). The CLI passes this through from its own `--port` flag.
 - **Graceful shutdown**: The generated server handles SIGINT/SIGTERM by calling `renderer.Stop()` to terminate the Bun sidecar, preventing orphaned processes. A `defer r.Stop()` also covers panics and normal exits.
 - **Dynamic params**: Accessed via `ctx.Request.PathValue("id")` in user code.

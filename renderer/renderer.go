@@ -135,7 +135,7 @@ func (r *Renderer) Render(req RenderRequest) (string, error) {
 // derived from the location of this source file.
 func frameworkRoot() string {
 	_, filename, _, _ := runtime.Caller(0)
-	// filename is .../internal/renderer/renderer.go
-	// framework root is two directories up
-	return filepath.Dir(filepath.Dir(filepath.Dir(filename)))
+	// filename is .../renderer/renderer.go
+	// framework root is one directory up
+	return filepath.Dir(filepath.Dir(filename))
 }

@@ -200,7 +200,7 @@ func writeImports(b *strings.Builder, imports []serverImport) {
 	b.WriteString("\n")
 	// Framework.
 	fmt.Fprintf(b, "\trstf %q\n", frameworkModule)
-	fmt.Fprintf(b, "\t%q\n", frameworkModule+"/internal/renderer")
+	fmt.Fprintf(b, "\t%q\n", frameworkModule+"/renderer")
 	b.WriteString("\n")
 	// User packages.
 	for _, imp := range imports {
