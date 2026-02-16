@@ -118,10 +118,13 @@ func handleTsxChange(entries map[string]string) {
 }
 
 // startServer launches the generated Go server as a child process.
+// The process is placed in its own process group so stopServer can kill
+// both `go run` and the child binary it spawns.
 func startServer(port string) *exec.Cmd {
 	cmd := exec.Command("go", "run", "./.rstf/server_gen.go", "--port", port)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start server: %s\n", err)
@@ -130,12 +133,14 @@ func startServer(port string) *exec.Cmd {
 	return cmd
 }
 
-// stopServer sends SIGINT to the server process and waits for it to exit.
+// stopServer kills the server's entire process group (go run + child binary),
+// then waits for the process to exit.
 func stopServer(cmd *exec.Cmd) {
 	if cmd == nil || cmd.Process == nil {
 		return
 	}
-	cmd.Process.Signal(syscall.SIGINT)
+	// Kill the entire process group: negative PID targets the group.
+	syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	cmd.Wait()
 }
 
