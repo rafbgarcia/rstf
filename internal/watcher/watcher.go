@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -74,13 +75,28 @@ func (w *Watcher) Stop() {
 func (w *Watcher) loop() {
 	defer close(w.done)
 
+	// Debounce: collect events, then fire after 50ms of quiet.
+	const debounce = 50 * time.Millisecond
+	pending := make(map[string]Event) // keyed by path
+	timer := time.NewTimer(0)
+	timer.Stop() // don't fire immediately
+
 	for {
 		select {
 		case ev, ok := <-w.fsw.Events:
 			if !ok {
 				return
 			}
-			w.handleEvent(ev)
+			if e, ok := w.toEvent(ev); ok {
+				pending[e.Path] = e
+				timer.Reset(debounce)
+			}
+
+		case <-timer.C:
+			for _, e := range pending {
+				w.onChange(e)
+			}
+			pending = make(map[string]Event)
 
 		case _, ok := <-w.fsw.Errors:
 			if !ok {
@@ -91,10 +107,12 @@ func (w *Watcher) loop() {
 	}
 }
 
-func (w *Watcher) handleEvent(ev fsnotify.Event) {
+// toEvent converts an fsnotify event into a watcher Event, if relevant.
+// As a side effect, newly created directories are added to the watch list.
+func (w *Watcher) toEvent(ev fsnotify.Event) (Event, bool) {
 	// Only care about writes, creates, and renames (which may create new files).
 	if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) == 0 {
-		return
+		return Event{}, false
 	}
 
 	// If a new directory was created, walk it and watch all subdirectories.
@@ -112,16 +130,16 @@ func (w *Watcher) handleEvent(ev fsnotify.Event) {
 				}
 				return nil
 			})
-			return
+			return Event{}, false
 		}
 	}
 
 	kind := fileKind(ev.Name)
 	if kind == "" {
-		return
+		return Event{}, false
 	}
 
-	w.onChange(Event{Path: ev.Name, Kind: kind})
+	return Event{Path: ev.Name, Kind: kind}, true
 }
 
 // fileKind returns "go" or "tsx" for watched extensions, "" otherwise.

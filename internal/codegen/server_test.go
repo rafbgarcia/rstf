@@ -49,7 +49,7 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		"window.__RSTF_SERVER_DATA__",
 		"func main() {",
 		"r := renderer.New()",
-		`r.Start(".")`,
+		`if err := r.Start("."); err != nil`,
 		`defer r.Stop()`,
 		`signal.Notify(c, os.Interrupt, syscall.SIGTERM)`,
 		`http.Handle("GET /.rstf/static/"`,

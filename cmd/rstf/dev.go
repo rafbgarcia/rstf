@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/rafbgarcia/rstf/internal/codegen"
 	"github.com/rafbgarcia/rstf/internal/watcher"
@@ -17,22 +18,24 @@ import (
 func runDev(port string) {
 	// Step 1: Run codegen.
 	fmt.Print("  Codegen ......... ")
+	t := time.Now()
 	result, err := codegen.Generate(".")
 	if err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "codegen error: %s\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("done (%d routes)\n", result.RouteCount)
+	fmt.Printf("done (%d routes) [%s]\n", result.RouteCount, fmtDuration(time.Since(t)))
 
 	// Step 2: Bundle client JS for each route.
 	fmt.Print("  Client bundles .. ")
+	t = time.Now()
 	if err := bundleEntries(result.Entries); err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "bundling error: %s\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("done")
+	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 
 	// Step 3: Start the Go HTTP server.
 	fmt.Printf("  HTTP server ..... starting on :%s\n", port)
@@ -77,20 +80,22 @@ func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult, port strin
 	stopServer(server)
 
 	fmt.Print("  Codegen ......... ")
+	t := time.Now()
 	newResult, err := codegen.Generate(".")
 	if err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "  codegen error: %s\n", err)
 		return startServer(port) // restart with old code
 	}
-	fmt.Printf("done (%d routes)\n", newResult.RouteCount)
+	fmt.Printf("done (%d routes) [%s]\n", newResult.RouteCount, fmtDuration(time.Since(t)))
 
 	fmt.Print("  Client bundles .. ")
+	t = time.Now()
 	if err := bundleEntries(newResult.Entries); err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "  bundling error: %s\n", err)
 	} else {
-		fmt.Println("done")
+		fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 	}
 
 	*result = newResult
@@ -101,12 +106,13 @@ func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult, port strin
 // handleTsxChange re-bundles client JS and invalidates the sidecar module cache.
 func handleTsxChange(entries map[string]string) {
 	fmt.Print("  Client bundles .. ")
+	t := time.Now()
 	if err := bundleEntries(entries); err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "  bundling error: %s\n", err)
 		return
 	}
-	fmt.Println("done")
+	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 
 	invalidateSidecar()
 }
@@ -142,6 +148,14 @@ func invalidateSidecar() {
 	}
 	port := strings.TrimSpace(string(data))
 	http.Post("http://localhost:"+port+"/invalidate", "application/json", nil)
+}
+
+// fmtDuration formats a duration as a human-friendly string (e.g. "12ms", "1.3s").
+func fmtDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	return fmt.Sprintf("%.1fs", d.Seconds())
 }
 
 // bundleEntries runs bun build for each hydration entry file, producing

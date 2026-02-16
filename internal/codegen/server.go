@@ -238,31 +238,30 @@ func writeMain(
 	aliasMap map[string]serverImport,
 	deps map[string][]string,
 ) {
-	b.WriteString("func main() {\n")
-	b.WriteString("\tport := flag.String(\"port\", \"3000\", \"HTTP server port\")\n")
-	b.WriteString("\tflag.Parse()\n\n")
-	b.WriteString("\tr := renderer.New()\n")
-	b.WriteString("\tr.Start(\".\")\n")
-	b.WriteString("\tdefer r.Stop()\n")
-	b.WriteString("\n")
-	b.WriteString("\t// Stop the sidecar on interrupt/terminate signals.\n")
-	b.WriteString("\tgo func() {\n")
-	b.WriteString("\t\tc := make(chan os.Signal, 1)\n")
-	b.WriteString("\t\tsignal.Notify(c, os.Interrupt, syscall.SIGTERM)\n")
-	b.WriteString("\t\t<-c\n")
-	b.WriteString("\t\tr.Stop()\n")
-	b.WriteString("\t\tos.Exit(0)\n")
-	b.WriteString("\t}()\n")
+	b.WriteString(`func main() {
+	port := flag.String("port", "3000", "HTTP server port")
+	flag.Parse()
 
-	// Static file serving for client bundles.
-	b.WriteString("\n")
-	b.WriteString("\thttp.Handle(\"GET /.rstf/static/\", http.StripPrefix(\"/.rstf/static/\", http.FileServer(http.Dir(\".rstf/static\"))))\n")
+	r := renderer.New()
+	if err := r.Start("."); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to start renderer: %s\n", err)
+		os.Exit(1)
+	}
+	defer r.Stop()
+
+	// Stop the sidecar on interrupt/terminate signals.
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		<-c
+		r.Stop()
+		os.Exit(0)
+	}()
+
+	http.Handle("GET /.rstf/static/", http.StripPrefix("/.rstf/static/", http.FileServer(http.Dir(".rstf/static"))))
+`)
 
 	for _, route := range routes {
-		b.WriteString("\n")
-		fmt.Fprintf(b, "\thttp.HandleFunc(\"GET %s\", func(w http.ResponseWriter, req *http.Request) {\n", route.urlPattern)
-		b.WriteString("\t\tctx := rstf.NewContext(req)\n\n")
-
 		// Build ServerData entries.
 		type sdEntry struct {
 			key  string // e.g. "main", "routes/dashboard"
@@ -294,13 +293,18 @@ func writeMain(
 			})
 		}
 
-		// Build the serverData map variable.
-		b.WriteString("\t\tsd := map[string]map[string]any{\n")
+		fmt.Fprintf(b, `
+	http.HandleFunc("GET %s", func(w http.ResponseWriter, req *http.Request) {
+		ctx := rstf.NewContext(req)
+
+		sd := map[string]map[string]any{
+`, route.urlPattern)
+
 		for _, e := range entries {
 			fmt.Fprintf(b, "\t\t\t%q: %s,\n", e.key, e.call)
 		}
-		b.WriteString("\t\t}\n\n")
 
+		fmt.Fprintf(b, "\t\t}\n\n")
 		fmt.Fprintf(b, "\t\thtml, err := r.Render(renderer.RenderRequest{\n")
 		fmt.Fprintf(b, "\t\t\tComponent: %q,\n", route.dir)
 		fmt.Fprintf(b, "\t\t\tLayout:    \"main\",\n")
@@ -309,18 +313,20 @@ func writeMain(
 			b.WriteString("\t\t\tServerData: sd,\n")
 		}
 
-		b.WriteString("\t\t})\n")
-		b.WriteString("\t\tif err != nil {\n")
-		b.WriteString("\t\t\thttp.Error(w, err.Error(), 500)\n")
-		b.WriteString("\t\t\treturn\n")
-		b.WriteString("\t\t}\n")
-		fmt.Fprintf(b, "\t\tfmt.Fprint(w, assemblePage(html, sd, %q))\n", bundlePath(route.dir))
-		b.WriteString("\t})\n")
+		fmt.Fprintf(b, `		})
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		fmt.Fprint(w, assemblePage(html, sd, %q))
+	})
+`, bundlePath(route.dir))
 	}
 
-	b.WriteString("\n")
-	b.WriteString("\thttp.ListenAndServe(\":\"+*port, nil)\n")
-	b.WriteString("}\n")
+	b.WriteString(`
+	http.ListenAndServe(":"+*port, nil)
+}
+`)
 }
 
 // ssrCall returns the Go expression for calling an SSR function.

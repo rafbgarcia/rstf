@@ -34,6 +34,7 @@ func (r *Renderer) Start(projectRoot string) error {
 	}
 
 	r.cmd = exec.Command("bun", "run", ssrPath, "--project-root", absRoot)
+	r.cmd.Env = append(os.Environ(), "NO_COLOR=1")
 	r.cmd.Stderr = os.Stderr
 
 	stdout, err := r.cmd.StdoutPipe()
