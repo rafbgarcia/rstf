@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/rafbgarcia/rstf/internal/codegen"
 )
 
@@ -28,22 +29,8 @@ func TestHydration(t *testing.T) {
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
 
 	// Step 2: Bundle client JS for each entry.
-	for _, entryPath := range result.Entries {
-		base := filepath.Base(entryPath)
-		name := base[:len(base)-len(".entry.tsx")]
-		outDir := filepath.Join(root, ".rstf", "static", name)
-
-		if err := os.MkdirAll(outDir, 0755); err != nil {
-			t.Fatalf("creating %s: %v", outDir, err)
-		}
-
-		outFile := filepath.Join(outDir, "bundle.js")
-		cmd := exec.Command("bun", "build", entryPath, "--outfile", outFile)
-		cmd.Dir = root
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("bundling %s: %v", entryPath, err)
-		}
+	if err := bundler.BundleEntries(root, result.Entries); err != nil {
+		t.Fatalf("bundling: %v", err)
 	}
 
 	// Step 3: Pick a free port.
@@ -117,22 +104,8 @@ func TestCSS(t *testing.T) {
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
 
 	// Step 2: Bundle client JS.
-	for _, entryPath := range result.Entries {
-		base := filepath.Base(entryPath)
-		name := base[:len(base)-len(".entry.tsx")]
-		outDir := filepath.Join(root, ".rstf", "static", name)
-
-		if err := os.MkdirAll(outDir, 0755); err != nil {
-			t.Fatalf("creating %s: %v", outDir, err)
-		}
-
-		outFile := filepath.Join(outDir, "bundle.js")
-		cmd := exec.Command("bun", "build", entryPath, "--outfile", outFile)
-		cmd.Dir = root
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("bundling %s: %v", entryPath, err)
-		}
+	if err := bundler.BundleEntries(root, result.Entries); err != nil {
+		t.Fatalf("bundling: %v", err)
 	}
 
 	// Step 3: Build CSS via PostCSS (same approach as dev.go's buildCSSWithPostCSS).

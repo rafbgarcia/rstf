@@ -38,7 +38,7 @@ Starts the development server.
 #### Startup sequence
 
 1. **Run codegen** (`codegen.Generate(".")`) — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` dual-mode runtime modules, `.rstf/entries/{name}.entry.tsx` hydration entries, and `.rstf/server_gen.go`.
-2. **Bundle client JS** — for each SSR route, run `bun build` on the hydration entry to produce `.rstf/static/{name}/bundle.js`.
+2. **Bundle client JS** — bundle all hydration entries via esbuild (Go API, single in-process call) to produce `.rstf/static/{name}/bundle.js` per route.
 3. **Build CSS** (if `main.css` exists) — if `postcss.config.mjs` is present, process `main.css` through PostCSS via a generated build script; otherwise copy `main.css` as-is. Output goes to `.rstf/static/main.css`. The generated server detects this file at startup and injects a `<link>` tag.
 4. **Start Go HTTP server** — `go run ./.rstf/server_gen.go --port {port}`, which itself starts the Bun sidecar and listens on the specified port. The generated server serves static assets from `/.rstf/static/` and assembles full HTML pages with `<!DOCTYPE html>`, optional CSS link, server data injection, and bundle script tags.
 5. **Start file watcher** — watch for `.go`, `.tsx`, and `.css` changes (see `internal/watcher/watcher-spec.md`).

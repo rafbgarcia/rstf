@@ -163,7 +163,8 @@ func Generate(projectRoot string) (GenerateResult, error) {
 	// server_gen.go lives in .rstf/ which Go tools skip (dot-prefixed dir),
 	// so go mod tidy won't discover its imports. We use go get to explicitly
 	// resolve the framework packages and their transitive deps (e.g. chi).
-	if err := ensureDeps(absRoot); err != nil {
+	// Skipped when developing the framework itself or when already resolved.
+	if err := ensureDeps(absRoot, modulePath); err != nil {
 		return GenerateResult{}, err
 	}
 
@@ -259,7 +260,22 @@ func componentPathForDir(dir string) string {
 // server_gen.go imports. Since server_gen.go lives in .rstf/ (a dot-prefixed
 // directory invisible to go mod tidy), its transitive dependencies (e.g. chi
 // via rstf/router) won't appear in go.sum otherwise.
-func ensureDeps(projectRoot string) error {
+//
+// Skipped when the current module IS the framework (sub-packages are local)
+// or when the framework module is already recorded in go.sum.
+func ensureDeps(projectRoot, modulePath string) error {
+	// Developing the framework itself — sub-packages are local.
+	if modulePath == frameworkModule {
+		return nil
+	}
+
+	// Framework module already in go.sum — deps are resolved.
+	if sumContent, err := os.ReadFile(filepath.Join(projectRoot, "go.sum")); err == nil {
+		if strings.Contains(string(sumContent), frameworkModule+" ") {
+			return nil
+		}
+	}
+
 	cmd := exec.Command("go", "get",
 		frameworkModule+"/renderer",
 		frameworkModule+"/router",

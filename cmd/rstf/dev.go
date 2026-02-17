@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/rafbgarcia/rstf/internal/codegen"
 	"github.com/rafbgarcia/rstf/internal/watcher"
 )
@@ -30,7 +31,7 @@ func runDev(port string) {
 	// Step 2: Bundle client JS for each route.
 	fmt.Print("  Client bundles .. ")
 	t = time.Now()
-	if err := bundleEntries(result.Entries); err != nil {
+	if err := bundler.BundleEntries(".", result.Entries); err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "bundling error: %s\n", err)
 		os.Exit(1)
@@ -106,7 +107,7 @@ func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult, port strin
 
 	fmt.Print("  Client bundles .. ")
 	t = time.Now()
-	if err := bundleEntries(newResult.Entries); err != nil {
+	if err := bundler.BundleEntries(".", newResult.Entries); err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "  bundling error: %s\n", err)
 	} else {
@@ -127,7 +128,7 @@ func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult, port strin
 func handleTsxChange(entries map[string]string) {
 	fmt.Print("  Client bundles .. ")
 	t := time.Now()
-	if err := bundleEntries(entries); err != nil {
+	if err := bundler.BundleEntries(".", entries); err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "  bundling error: %s\n", err)
 		return
@@ -198,31 +199,6 @@ func fmtDuration(d time.Duration) string {
 		return fmt.Sprintf("%dms", d.Milliseconds())
 	}
 	return fmt.Sprintf("%.1fs", d.Seconds())
-}
-
-// bundleEntries runs bun build for each hydration entry file, producing
-// .rstf/static/{name}/bundle.js for each route.
-func bundleEntries(entries map[string]string) error {
-	for _, entryPath := range entries {
-		// Derive the output directory from the entry filename.
-		// e.g. .rstf/entries/dashboard.entry.tsx -> .rstf/static/dashboard/
-		base := filepath.Base(entryPath)
-		name := base[:len(base)-len(".entry.tsx")]
-		outDir := filepath.Join(".rstf", "static", name)
-
-		if err := os.MkdirAll(outDir, 0755); err != nil {
-			return fmt.Errorf("creating %s: %w", outDir, err)
-		}
-
-		outFile := filepath.Join(outDir, "bundle.js")
-		cmd := exec.Command("bun", "build", entryPath, "--outfile", outFile)
-		cmd.Stderr = os.Stderr
-
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("bundling %s: %w", entryPath, err)
-		}
-	}
-	return nil
 }
 
 // buildCSS processes main.css if it exists. If a postcss.config.mjs is present,
