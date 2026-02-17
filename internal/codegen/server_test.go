@@ -42,6 +42,7 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`"syscall"`,
 		`rstf "github.com/rafbgarcia/rstf"`,
 		`"github.com/rafbgarcia/rstf/renderer"`,
+		`"github.com/rafbgarcia/rstf/router"`,
 		`app "github.com/user/myapp"`,
 		`dashboard "github.com/user/myapp/routes/dashboard"`,
 		"func structToMap(v any) map[string]any {",
@@ -52,8 +53,9 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`if err := r.Start("."); err != nil`,
 		`defer r.Stop()`,
 		`signal.Notify(c, os.Interrupt, syscall.SIGTERM)`,
-		`http.Handle("GET /.rstf/static/"`,
-		`http.HandleFunc("GET /dashboard"`,
+		`rt := router.New()`,
+		`rt.Handle("/.rstf/static/*"`,
+		`rt.Get("/dashboard"`,
 		"ctx := rstf.NewContext(req)",
 		`"main": structToMap(app.SSR(ctx))`,
 		`"routes/dashboard": structToMap(dashboard.SSR(ctx))`,
@@ -65,7 +67,7 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`assemblePage(html, sd, "/.rstf/static/dashboard/bundle.js")`,
 		`flag.String("port", "3000", "HTTP server port")`,
 		`flag.Parse()`,
-		`http.ListenAndServe(":"+*port, nil)`,
+		`http.ListenAndServe(":"+*port, rt)`,
 	}
 
 	for _, exp := range expectations {
@@ -115,9 +117,9 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 
 	// Verify all three handlers exist.
 	expectations := []string{
-		`http.HandleFunc("GET /"`,
-		`http.HandleFunc("GET /dashboard"`,
-		`http.HandleFunc("GET /users/{id}/edit"`,
+		`rt.Get("/"`,
+		`rt.Get("/dashboard"`,
+		`rt.Get("/users/{id}/edit"`,
 		// Dynamic route should use .rstf/pkgs/ symlink path ($ stripped).
 		`useredit "github.com/user/myapp/.rstf/pkgs/routes/users.id.edit"`,
 	}
@@ -133,9 +135,9 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 	}
 
 	// Verify routes are sorted: / comes before /dashboard comes before /users/{id}/edit.
-	idxRoot := strings.Index(got, `"GET /"`)
-	idxDash := strings.Index(got, `"GET /dashboard"`)
-	idxUser := strings.Index(got, `"GET /users/{id}/edit"`)
+	idxRoot := strings.Index(got, `rt.Get("/"`)
+	idxDash := strings.Index(got, `rt.Get("/dashboard"`)
+	idxUser := strings.Index(got, `rt.Get("/users/{id}/edit"`)
 	if idxRoot >= idxDash || idxDash >= idxUser {
 		t.Errorf("routes not sorted by URL pattern: / at %d, /dashboard at %d, /users/{id}/edit at %d", idxRoot, idxDash, idxUser)
 	}
@@ -215,7 +217,7 @@ func TestGenerateServer_RouteWithoutGoFile(t *testing.T) {
 	}
 
 	// Should still have a handler for /about.
-	if !strings.Contains(got, `http.HandleFunc("GET /about"`) {
+	if !strings.Contains(got, `rt.Get("/about"`) {
 		t.Errorf("output missing handler for /about\n\nFull output:\n%s", got)
 	}
 
@@ -323,7 +325,7 @@ func TestGenerateServer_NoLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(got, `http.HandleFunc("GET /dashboard"`) {
+	if !strings.Contains(got, `rt.Get("/dashboard"`) {
 		t.Errorf("output missing handler\n\nFull output:\n%s", got)
 	}
 	// Should NOT have layout import or SSR call.

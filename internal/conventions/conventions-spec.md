@@ -70,7 +70,7 @@ routes/users.$id.edit/           -> /users/{id}/edit
 routes/posts.$slug/              -> /posts/{slug}
 ```
 
-Dynamic parameters are accessed via `ctx.Request.PathValue("id")` in the Go handler, using Go 1.22+ ServeMux pattern matching.
+Dynamic parameters are accessed via `ctx.Request.PathValue("id")` in the Go handler. The generated server uses chi for routing and bridges chi URL params to Go's `Request.PathValue()` automatically.
 
 ### Shared components
 
@@ -102,7 +102,7 @@ Folder names in `routes/` are converted to URL patterns:
 1. Strip the `routes/` prefix.
 2. Use the folder name (ignore files inside).
 3. Split the folder name on `.` to get path segments.
-4. Replace `$param` segments with `{param}` (Go 1.22 ServeMux syntax).
+4. Replace `$param` segments with `{param}` (chi URL param syntax).
 5. The folder name `index` maps to `/`.
 
 | Folder | URL pattern |

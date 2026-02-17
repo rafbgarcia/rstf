@@ -77,7 +77,7 @@ func TestCodegen(t *testing.T) {
 		"structToMap(app.SSR(ctx))",
 		"structToMap(dashboard.SSR(ctx))",
 		"func assemblePage(",
-		`http.Handle("GET /.rstf/static/"`,
+		`rt.Handle("/.rstf/static/*"`,
 		"assemblePage(html, sd,",
 	} {
 		if !strings.Contains(serverStr, expected) {

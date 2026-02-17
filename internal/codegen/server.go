@@ -206,6 +206,7 @@ func writeImports(b *strings.Builder, imports []serverImport) {
 	// Framework.
 	fmt.Fprintf(b, "\trstf %q\n", frameworkModule)
 	fmt.Fprintf(b, "\t%q\n", frameworkModule+"/renderer")
+	fmt.Fprintf(b, "\t%q\n", frameworkModule+"/router")
 	b.WriteString("\n")
 	// User packages.
 	for _, imp := range imports {
@@ -263,7 +264,9 @@ func writeMain(
 		os.Exit(0)
 	}()
 
-	http.Handle("GET /.rstf/static/", http.StripPrefix("/.rstf/static/", http.FileServer(http.Dir(".rstf/static"))))
+	rt := router.New()
+
+	rt.Handle("/.rstf/static/*", http.StripPrefix("/.rstf/static/", http.FileServer(http.Dir(".rstf/static"))))
 `)
 
 	for _, route := range routes {
@@ -299,7 +302,7 @@ func writeMain(
 		}
 
 		fmt.Fprintf(b, `
-	http.HandleFunc("GET %s", func(w http.ResponseWriter, req *http.Request) {
+	rt.Get(%q, func(w http.ResponseWriter, req *http.Request) {
 		ctx := rstf.NewContext(req)
 
 		sd := map[string]map[string]any{
@@ -329,7 +332,7 @@ func writeMain(
 	}
 
 	b.WriteString(`
-	http.ListenAndServe(":"+*port, nil)
+	http.ListenAndServe(":"+*port, rt)
 }
 `)
 }

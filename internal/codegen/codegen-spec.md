@@ -114,7 +114,7 @@ GET /dashboard       -> [main, routes/dashboard, shared/ui/user-avatar]
 
 ## Server generation (`server_gen.go`)
 
-The generated server declares `package main` with `func main()`, imports the user's root package and all route/shared packages, and wires HTTP handlers using Go 1.22+ ServeMux patterns.
+The generated server declares `package main` with `func main()`, imports the user's root package and all route/shared packages, and wires HTTP handlers using `github.com/rafbgarcia/rstf/router`. The router wraps chi internally and resolves ambiguous routes by left-to-right specificity (literal segments beat wildcards). A middleware bridges chi URL params to `Request.SetPathValue()` so user code continues to use `ctx.Request.PathValue("id")`. Chi is a transitive dependency — the user's `go.mod` only requires the framework itself.
 
 **Rules:**
 
