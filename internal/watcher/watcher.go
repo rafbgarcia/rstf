@@ -15,7 +15,7 @@ type Event struct {
 	Kind string // "go" or "tsx"
 }
 
-// Watcher monitors an app directory for .go and .tsx file changes.
+// Watcher monitors an app directory for .go, .tsx, and .css file changes.
 type Watcher struct {
 	appRoot  string
 	onChange func(Event)
@@ -142,13 +142,16 @@ func (w *Watcher) toEvent(ev fsnotify.Event) (Event, bool) {
 	return Event{Path: ev.Name, Kind: kind}, true
 }
 
-// fileKind returns "go" or "tsx" for watched extensions, "" otherwise.
+// fileKind returns "go", "tsx", or "css" for watched extensions, "" otherwise.
 func fileKind(path string) string {
 	if strings.HasSuffix(path, ".go") {
 		return "go"
 	}
 	if strings.HasSuffix(path, ".tsx") {
 		return "tsx"
+	}
+	if strings.HasSuffix(path, ".css") {
+		return "css"
 	}
 	return ""
 }

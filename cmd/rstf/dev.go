@@ -37,16 +37,16 @@ func runDev(port string) {
 	}
 	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 
-	// Step 3: Ensure framework dependencies are in go.sum. The generated
-	// server_gen.go lives in .rstf/ which Go tools skip (dot-prefixed dir),
-	// so go mod tidy won't discover its imports. We use go get to explicitly
-	// resolve the framework packages and their transitive deps (e.g. chi).
-	if out, err := exec.Command("go", "get",
-		"github.com/rafbgarcia/rstf/renderer",
-		"github.com/rafbgarcia/rstf/router",
-	).CombinedOutput(); err != nil {
-		fmt.Fprintf(os.Stderr, "go get failed: %s\n%s", err, out)
-		os.Exit(1)
+	// Step 3: Build CSS (if main.css exists).
+	if _, err := os.Stat("main.css"); err == nil {
+		fmt.Print("  CSS ............. ")
+		t = time.Now()
+		if err := buildCSS(); err != nil {
+			fmt.Println("FAILED")
+			fmt.Fprintf(os.Stderr, "css error: %s\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 	}
 
 	// Step 4: Start the Go HTTP server.
@@ -77,6 +77,9 @@ func runDev(port string) {
 			case "tsx":
 				fmt.Printf("\n  [change] %s\n", ev.Path)
 				handleTsxChange(result.Entries)
+			case "css":
+				fmt.Printf("\n  [change] %s\n", ev.Path)
+				handleCssChange()
 			}
 
 		case <-sigCh:
@@ -110,12 +113,17 @@ func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult, port strin
 		fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 	}
 
+	if err := buildCSS(); err != nil {
+		fmt.Fprintf(os.Stderr, "  css error: %s\n", err)
+	}
+
 	*result = newResult
 	fmt.Printf("  HTTP server ..... restarting on :%s\n", port)
 	return startServer(port)
 }
 
-// handleTsxChange re-bundles client JS and invalidates the sidecar module cache.
+// handleTsxChange re-bundles client JS, rebuilds CSS (Tailwind scans TSX for
+// class names), and invalidates the sidecar module cache.
 func handleTsxChange(entries map[string]string) {
 	fmt.Print("  Client bundles .. ")
 	t := time.Now()
@@ -126,7 +134,24 @@ func handleTsxChange(entries map[string]string) {
 	}
 	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 
+	if err := buildCSS(); err != nil {
+		fmt.Fprintf(os.Stderr, "  css error: %s\n", err)
+	}
+
 	invalidateSidecar()
+}
+
+// handleCssChange rebuilds CSS. No JS rebundle or sidecar invalidation needed
+// since CSS is served statically via FileServer.
+func handleCssChange() {
+	fmt.Print("  CSS ............. ")
+	t := time.Now()
+	if err := buildCSS(); err != nil {
+		fmt.Println("FAILED")
+		fmt.Fprintf(os.Stderr, "  css error: %s\n", err)
+		return
+	}
+	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 }
 
 // startServer launches the generated Go server as a child process.
@@ -196,6 +221,77 @@ func bundleEntries(entries map[string]string) error {
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("bundling %s: %w", entryPath, err)
 		}
+	}
+	return nil
+}
+
+// buildCSS processes main.css if it exists. If a postcss.config.mjs is present,
+// it runs PostCSS via a generated build script. Otherwise, it copies main.css
+// directly to the static output directory.
+func buildCSS() error {
+	if _, err := os.Stat("main.css"); os.IsNotExist(err) {
+		return nil // no CSS to build
+	}
+
+	outDir := filepath.Join(".rstf", "static")
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return fmt.Errorf("creating %s: %w", outDir, err)
+	}
+
+	outFile := filepath.Join(outDir, "main.css")
+
+	// If a PostCSS config exists, run PostCSS via a build script.
+	if _, err := os.Stat("postcss.config.mjs"); err == nil {
+		return buildCSSWithPostCSS(outFile)
+	}
+
+	// No PostCSS config — copy main.css as-is.
+	src, err := os.ReadFile("main.css")
+	if err != nil {
+		return fmt.Errorf("reading main.css: %w", err)
+	}
+	if err := os.WriteFile(outFile, src, 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", outFile, err)
+	}
+	return nil
+}
+
+// buildCSSWithPostCSS writes a small build script to .rstf/ and runs it with
+// bun. The script loads the user's postcss.config.mjs and processes main.css.
+func buildCSSWithPostCSS(outFile string) error {
+	script := `import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { resolve } from "path";
+import { pathToFileURL } from "url";
+import postcss from "postcss";
+
+const configPath = resolve("postcss.config.mjs");
+const { default: config } = await import(pathToFileURL(configPath).href);
+
+const plugins = await Promise.all(
+  Object.entries(config.plugins || {}).map(async ([name, opts]) => {
+    const mod = await import(name);
+    return (mod.default || mod)(typeof opts === "object" ? opts : {});
+  })
+);
+
+const css = readFileSync(resolve("main.css"), "utf8");
+const result = await postcss(plugins).process(css, {
+  from: resolve("main.css"),
+  to: resolve("` + outFile + `"),
+});
+
+mkdirSync(resolve(".rstf/static"), { recursive: true });
+writeFileSync(resolve("` + outFile + `"), result.css);
+`
+	scriptPath := filepath.Join(".rstf", "build-css.mjs")
+	if err := os.WriteFile(scriptPath, []byte(script), 0644); err != nil {
+		return fmt.Errorf("writing build-css.mjs: %w", err)
+	}
+
+	cmd := exec.Command("bun", "run", scriptPath)
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("postcss processing: %w", err)
 	}
 	return nil
 }

@@ -226,11 +226,15 @@ func writeStructToMap(b *strings.Builder) {
 }
 
 func writeAssemblePage(b *strings.Builder) {
-	b.WriteString(`func assemblePage(html string, serverData map[string]map[string]any, bundlePath string) string {
+	b.WriteString(`func assemblePage(html string, serverData map[string]map[string]any, bundlePath string, cssPath string) string {
 	sdJSON, _ := json.Marshal(serverData)
 	dataScript := "<script>window.__RSTF_SERVER_DATA__ = " + string(sdJSON) + "</script>"
 	bundleScript := "<script src=\"" + bundlePath + "\"></script>"
-	page := "<!DOCTYPE html>" + strings.Replace(html, "</body>", dataScript+bundleScript+"</body>", 1)
+	page := "<!DOCTYPE html>" + html
+	if cssPath != "" {
+		page = strings.Replace(page, "</head>", "<link rel=\"stylesheet\" href=\""+cssPath+"\">\n</head>", 1)
+	}
+	page = strings.Replace(page, "</body>", dataScript+bundleScript+"</body>", 1)
 	return page
 }`)
 	b.WriteString("\n\n")
@@ -267,6 +271,11 @@ func writeMain(
 	rt := router.New()
 
 	rt.Handle("/.rstf/static/*", http.StripPrefix("/.rstf/static/", http.FileServer(http.Dir(".rstf/static"))))
+
+	var cssPath string
+	if _, err := os.Stat(".rstf/static/main.css"); err == nil {
+		cssPath = "/.rstf/static/main.css"
+	}
 `)
 
 	for _, route := range routes {
@@ -326,7 +335,7 @@ func writeMain(
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		fmt.Fprint(w, assemblePage(html, sd, %q))
+		fmt.Fprint(w, assemblePage(html, sd, %q, cssPath))
 	})
 `, bundlePath(route.dir))
 	}

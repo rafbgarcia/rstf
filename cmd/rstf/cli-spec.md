@@ -39,8 +39,9 @@ Starts the development server.
 
 1. **Run codegen** (`codegen.Generate(".")`) — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` dual-mode runtime modules, `.rstf/entries/{name}.entry.tsx` hydration entries, and `.rstf/server_gen.go`.
 2. **Bundle client JS** — for each SSR route, run `bun build` on the hydration entry to produce `.rstf/static/{name}/bundle.js`.
-3. **Start Go HTTP server** — `go run ./.rstf/server_gen.go --port {port}`, which itself starts the Bun sidecar and listens on the specified port. The generated server serves static bundles from `/.rstf/static/` and assembles full HTML pages with `<!DOCTYPE html>`, server data injection, and bundle script tags.
-4. **Start file watcher** — watch for `.go` and `.tsx` changes (see `internal/watcher/watcher-spec.md`).
+3. **Build CSS** (if `main.css` exists) — if `postcss.config.mjs` is present, process `main.css` through PostCSS via a generated build script; otherwise copy `main.css` as-is. Output goes to `.rstf/static/main.css`. The generated server detects this file at startup and injects a `<link>` tag.
+4. **Start Go HTTP server** — `go run ./.rstf/server_gen.go --port {port}`, which itself starts the Bun sidecar and listens on the specified port. The generated server serves static assets from `/.rstf/static/` and assembles full HTML pages with `<!DOCTYPE html>`, optional CSS link, server data injection, and bundle script tags.
+5. **Start file watcher** — watch for `.go`, `.tsx`, and `.css` changes (see `internal/watcher/watcher-spec.md`).
 
 #### Process management
 
@@ -50,8 +51,9 @@ Bun starts in milliseconds, so restarting the sidecar on Go changes has negligib
 
 #### File watcher behavior
 
-- **`.go` change** — re-run codegen, kill the server (sidecar dies with it), re-bundle, restart.
-- **`.tsx` change** — re-bundle all entries, hit the sidecar's cache invalidation endpoint via `.rstf/sidecar.port`. No restart.
+- **`.go` change** — re-run codegen, kill the server (sidecar dies with it), re-bundle JS, rebuild CSS, restart.
+- **`.tsx` change** — re-bundle all entries, rebuild CSS (Tailwind scans TSX for class names), hit the sidecar's cache invalidation endpoint via `.rstf/sidecar.port`. No restart.
+- **`.css` change** — rebuild CSS only. No JS rebundle, no sidecar invalidation (CSS is served statically).
 
 See `internal/watcher/watcher-spec.md` for details.
 
@@ -65,8 +67,11 @@ Forwards SIGINT to the `go run` child process. The generated server handles SIGI
 rstf dev
   Codegen ......... done (2 routes)
   Client bundles .. done
+  CSS ............. done
   HTTP server ..... starting on :3000
 ```
+
+The CSS line only appears if `main.css` exists at the project root.
 
 With file watcher:
 
@@ -74,6 +79,7 @@ With file watcher:
 rstf dev
   Codegen ......... done (2 routes)
   Client bundles .. done
+  CSS ............. done
   HTTP server ..... starting on :3000
 
   Watching for changes...
@@ -82,6 +88,9 @@ rstf dev
   Codegen ......... done (2 routes)
   Client bundles .. done
   HTTP server ..... restarting on :3000
+
+  [change] main.css
+  CSS ............. done
 ```
 
 ### `rstf build` (future)

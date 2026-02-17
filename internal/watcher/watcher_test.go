@@ -63,6 +63,28 @@ func TestTsxFileChange(t *testing.T) {
 	}
 }
 
+func TestCssFileChange(t *testing.T) {
+	dir := t.TempDir()
+
+	events := make(chan Event, 10)
+	w := New(dir, func(e Event) { events <- e })
+	if err := w.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+
+	path := filepath.Join(dir, "main.css")
+	os.WriteFile(path, []byte("body { color: red; }"), 0644)
+
+	ev, ok := waitEvent(events, 2*time.Second)
+	if !ok {
+		t.Fatal("expected event for .css file, got none")
+	}
+	if ev.Kind != "css" {
+		t.Fatalf("expected kind %q, got %q", "css", ev.Kind)
+	}
+}
+
 func TestTsFileIgnored(t *testing.T) {
 	dir := t.TempDir()
 

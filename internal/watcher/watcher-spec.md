@@ -9,7 +9,7 @@ The watcher monitors the user's app directory for file changes and triggers the 
 ```go
 type Event struct {
     Path string
-    Kind string // "go", "tsx"
+    Kind string // "go", "tsx", "css"
 }
 
 type Watcher struct { ... }
@@ -25,8 +25,9 @@ The watcher calls `onChange` whenever a relevant file is created, modified, or d
 
 | File changed | Event kind | What the CLI does |
 |-------------|------------|-------------------|
-| `*.go`      | `"go"`     | Re-run codegen → re-bundle client JS → kill server (sidecar dies with it) → restart |
-| `*.tsx`     | `"tsx"`    | Re-bundle all client bundles → signal Bun sidecar to clear module cache (no restart) |
+| `*.go`      | `"go"`     | Re-run codegen → re-bundle client JS → rebuild CSS → kill server (sidecar dies with it) → restart |
+| `*.tsx`     | `"tsx"`    | Re-bundle all client bundles → rebuild CSS (Tailwind scans TSX for class names) → signal Bun sidecar to clear module cache (no restart) |
+| `*.css`     | `"css"`    | Rebuild CSS only (no JS rebundle, no sidecar invalidation — CSS is served statically) |
 
 `.ts` files are not watched — they don't trigger any rebuild since they don't have Go companions and aren't route components.
 

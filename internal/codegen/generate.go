@@ -3,6 +3,7 @@ package codegen
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -158,6 +159,14 @@ func Generate(projectRoot string) (GenerateResult, error) {
 		return GenerateResult{}, fmt.Errorf("writing server_gen.go: %w", err)
 	}
 
+	// 10. Ensure framework dependencies are in go.sum. The generated
+	// server_gen.go lives in .rstf/ which Go tools skip (dot-prefixed dir),
+	// so go mod tidy won't discover its imports. We use go get to explicitly
+	// resolve the framework packages and their transitive deps (e.g. chi).
+	if err := ensureDeps(absRoot); err != nil {
+		return GenerateResult{}, err
+	}
+
 	// Count routes.
 	routeCount := 0
 	routeSet := map[string]bool{}
@@ -244,4 +253,20 @@ func componentPathForDir(dir string) string {
 		return "main"
 	}
 	return dir
+}
+
+// ensureDeps runs `go get` for framework packages that the generated
+// server_gen.go imports. Since server_gen.go lives in .rstf/ (a dot-prefixed
+// directory invisible to go mod tidy), its transitive dependencies (e.g. chi
+// via rstf/router) won't appear in go.sum otherwise.
+func ensureDeps(projectRoot string) error {
+	cmd := exec.Command("go", "get",
+		frameworkModule+"/renderer",
+		frameworkModule+"/router",
+	)
+	cmd.Dir = projectRoot
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("resolving framework deps: %s\n%s", err, out)
+	}
+	return nil
 }
