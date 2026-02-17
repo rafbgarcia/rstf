@@ -37,11 +37,23 @@ func runDev(port string) {
 	}
 	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 
-	// Step 3: Start the Go HTTP server.
+	// Step 3: Ensure framework dependencies are in go.sum. The generated
+	// server_gen.go lives in .rstf/ which Go tools skip (dot-prefixed dir),
+	// so go mod tidy won't discover its imports. We use go get to explicitly
+	// resolve the framework packages and their transitive deps (e.g. chi).
+	if out, err := exec.Command("go", "get",
+		"github.com/rafbgarcia/rstf/renderer",
+		"github.com/rafbgarcia/rstf/router",
+	).CombinedOutput(); err != nil {
+		fmt.Fprintf(os.Stderr, "go get failed: %s\n%s", err, out)
+		os.Exit(1)
+	}
+
+	// Step 4: Start the Go HTTP server.
 	fmt.Printf("  HTTP server ..... starting on :%s\n", port)
 	server := startServer(port)
 
-	// Step 4: Start file watcher.
+	// Step 5: Start file watcher.
 	fmt.Println("\n  Watching for changes...")
 
 	eventCh := make(chan watcher.Event, 100)
@@ -51,7 +63,7 @@ func runDev(port string) {
 		os.Exit(1)
 	}
 
-	// Step 5: Event loop — react to file changes and SIGINT.
+	// Step 6: Event loop — react to file changes and SIGINT.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
