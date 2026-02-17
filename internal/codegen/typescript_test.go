@@ -225,6 +225,8 @@ func TestNamespace(t *testing.T) {
 		{"settings", "Settings"},
 		{"users/profile", "UsersProfile"},
 		{"admin/users/edit", "AdminUsersEdit"},
+		{"auth/forgot-password", "AuthForgotPassword"},
+		{"multi-word-segment", "MultiWordSegment"},
 	}
 	for _, tt := range tests {
 		got := Namespace(tt.dir)

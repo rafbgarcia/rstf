@@ -7,7 +7,8 @@ import (
 )
 
 // Namespace returns the PascalCase namespace name for a route directory path.
-// Examples: "dashboard" -> "Dashboard", "users/profile" -> "UsersProfile"
+// Examples: "dashboard" -> "Dashboard", "users/profile" -> "UsersProfile",
+// "auth/forgot-password" -> "AuthForgotPassword"
 func Namespace(dir string) string {
 	if dir == "." {
 		return "Main"
@@ -18,7 +19,9 @@ func Namespace(dir string) string {
 		if part == "" {
 			continue
 		}
-		result.WriteString(ucFirst(part))
+		for _, seg := range strings.Split(part, "-") {
+			result.WriteString(ucFirst(seg))
+		}
 	}
 	return result.String()
 }
