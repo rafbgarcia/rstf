@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
@@ -297,16 +298,13 @@ func jsonTagName(field *ast.Field) string {
 	if field.Tag == nil {
 		return ""
 	}
-	tag := strings.Trim(field.Tag.Value, "`")
-	for _, part := range strings.Split(tag, " ") {
-		if strings.HasPrefix(part, "json:\"") {
-			val := strings.TrimPrefix(part, "json:\"")
-			val = strings.TrimSuffix(val, "\"")
-			name, _, _ := strings.Cut(val, ",")
-			return name
-		}
+	tag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
+	name, ok := tag.Lookup("json")
+	if !ok {
+		return ""
 	}
-	return ""
+	name, _, _ = strings.Cut(name, ",")
+	return name
 }
 
 // goTypeToTS maps a Go type name to its TypeScript equivalent.
