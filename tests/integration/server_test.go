@@ -48,19 +48,14 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 
-	// Step 4: Verify HTML output.
-	checks := []string{
-		"<html",                      // Layout rendered
-		"Basic Example",              // Layout server data
-		"Welcome to the dashboard!", // Route server data
-		"First Post",                 // Post title
-		"Draft Post",                 // Second post
-		"(published)",                // Published indicator
-		"(draft)",                    // Draft indicator
-	}
-	for _, check := range checks {
-		if !strings.Contains(html, check) {
-			t.Errorf("HTML missing %q\n\nFull HTML:\n%s", check, html)
-		}
+	// Step 4: Verify full HTML output.
+	// Strip React's <!-- --> comment nodes (internal text boundary markers)
+	// so the expected string is clean and not coupled to React internals.
+	got := strings.ReplaceAll(html, "<!-- -->", "")
+
+	want := `<html><head><title>Basic Example</title><title>Dashboard - Welcome to the dashboard!</title></head><body><header><h1>Basic Example</h1><nav><a href="/dashboard">Dashboard</a></nav></header><main><div><h2 class="text-blue-500">Welcome to the dashboard!</h2><button data-testid="counter">Count: 0</button><ul><li>First Post (published)</li><li>Draft Post (draft)</li></ul></div></main></body></html>`
+
+	if got != want {
+		t.Errorf("HTML mismatch.\n\nGot:\n%s\n\nWant:\n%s", got, want)
 	}
 }

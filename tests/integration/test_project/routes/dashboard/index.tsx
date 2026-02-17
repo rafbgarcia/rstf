@@ -6,6 +6,7 @@ export function View() {
   const [count, setCount] = useState(0);
   return (
     <div>
+      <title>{`Dashboard - ${message}`}</title>
       <h2 className="text-blue-500">{message}</h2>
       <button data-testid="counter" onClick={() => setCount((c) => c + 1)}>
         Count: {count}
