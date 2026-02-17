@@ -18,14 +18,14 @@ type Event struct {
 // Watcher monitors an app directory for .go, .tsx, and .css file changes.
 type Watcher struct {
 	appRoot  string
-	onChange func(Event)
+	onChange func([]Event)
 	fsw      *fsnotify.Watcher
 	done     chan struct{}
 }
 
 // New creates a Watcher that monitors appRoot for file changes.
-// onChange is called for each relevant file event.
-func New(appRoot string, onChange func(Event)) *Watcher {
+// onChange is called with a batch of events after the debounce period.
+func New(appRoot string, onChange func([]Event)) *Watcher {
 	return &Watcher{
 		appRoot:  appRoot,
 		onChange: onChange,
@@ -93,9 +93,11 @@ func (w *Watcher) loop() {
 			}
 
 		case <-timer.C:
+			batch := make([]Event, 0, len(pending))
 			for _, e := range pending {
-				w.onChange(e)
+				batch = append(batch, e)
 			}
+			w.onChange(batch)
 			pending = make(map[string]Event)
 
 		case _, ok := <-w.fsw.Errors:

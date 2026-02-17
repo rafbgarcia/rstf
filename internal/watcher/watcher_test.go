@@ -7,22 +7,22 @@ import (
 	"time"
 )
 
-// waitEvent waits up to timeout for an event on ch. Returns the event and true,
-// or a zero Event and false if the timeout expires.
-func waitEvent(ch <-chan Event, timeout time.Duration) (Event, bool) {
+// waitBatch waits up to timeout for a batch of events on ch. Returns the batch
+// and true, or nil and false if the timeout expires.
+func waitBatch(ch <-chan []Event, timeout time.Duration) ([]Event, bool) {
 	select {
-	case ev := <-ch:
-		return ev, true
+	case batch := <-ch:
+		return batch, true
 	case <-time.After(timeout):
-		return Event{}, false
+		return nil, false
 	}
 }
 
 func TestGoFileChange(t *testing.T) {
 	dir := t.TempDir()
 
-	events := make(chan Event, 10)
-	w := New(dir, func(e Event) { events <- e })
+	events := make(chan []Event, 10)
+	w := New(dir, func(batch []Event) { events <- batch })
 	if err := w.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -32,20 +32,20 @@ func TestGoFileChange(t *testing.T) {
 	path := filepath.Join(dir, "main.go")
 	os.WriteFile(path, []byte("package main"), 0644)
 
-	ev, ok := waitEvent(events, 2*time.Second)
+	batch, ok := waitBatch(events, 2*time.Second)
 	if !ok {
 		t.Fatal("expected event for .go file, got none")
 	}
-	if ev.Kind != "go" {
-		t.Fatalf("expected kind %q, got %q", "go", ev.Kind)
+	if batch[0].Kind != "go" {
+		t.Fatalf("expected kind %q, got %q", "go", batch[0].Kind)
 	}
 }
 
 func TestTsxFileChange(t *testing.T) {
 	dir := t.TempDir()
 
-	events := make(chan Event, 10)
-	w := New(dir, func(e Event) { events <- e })
+	events := make(chan []Event, 10)
+	w := New(dir, func(batch []Event) { events <- batch })
 	if err := w.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -54,20 +54,20 @@ func TestTsxFileChange(t *testing.T) {
 	path := filepath.Join(dir, "App.tsx")
 	os.WriteFile(path, []byte("export function View() {}"), 0644)
 
-	ev, ok := waitEvent(events, 2*time.Second)
+	batch, ok := waitBatch(events, 2*time.Second)
 	if !ok {
 		t.Fatal("expected event for .tsx file, got none")
 	}
-	if ev.Kind != "tsx" {
-		t.Fatalf("expected kind %q, got %q", "tsx", ev.Kind)
+	if batch[0].Kind != "tsx" {
+		t.Fatalf("expected kind %q, got %q", "tsx", batch[0].Kind)
 	}
 }
 
 func TestCssFileChange(t *testing.T) {
 	dir := t.TempDir()
 
-	events := make(chan Event, 10)
-	w := New(dir, func(e Event) { events <- e })
+	events := make(chan []Event, 10)
+	w := New(dir, func(batch []Event) { events <- batch })
 	if err := w.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -76,20 +76,20 @@ func TestCssFileChange(t *testing.T) {
 	path := filepath.Join(dir, "main.css")
 	os.WriteFile(path, []byte("body { color: red; }"), 0644)
 
-	ev, ok := waitEvent(events, 2*time.Second)
+	batch, ok := waitBatch(events, 2*time.Second)
 	if !ok {
 		t.Fatal("expected event for .css file, got none")
 	}
-	if ev.Kind != "css" {
-		t.Fatalf("expected kind %q, got %q", "css", ev.Kind)
+	if batch[0].Kind != "css" {
+		t.Fatalf("expected kind %q, got %q", "css", batch[0].Kind)
 	}
 }
 
 func TestTsFileIgnored(t *testing.T) {
 	dir := t.TempDir()
 
-	events := make(chan Event, 10)
-	w := New(dir, func(e Event) { events <- e })
+	events := make(chan []Event, 10)
+	w := New(dir, func(batch []Event) { events <- batch })
 	if err := w.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestTsFileIgnored(t *testing.T) {
 	path := filepath.Join(dir, "utils.ts")
 	os.WriteFile(path, []byte("export const x = 1"), 0644)
 
-	_, ok := waitEvent(events, 500*time.Millisecond)
+	_, ok := waitBatch(events, 500*time.Millisecond)
 	if ok {
 		t.Fatal("expected no event for .ts file, but got one")
 	}
@@ -113,8 +113,8 @@ func TestIgnoredDirectories(t *testing.T) {
 		os.MkdirAll(filepath.Join(dir, name), 0755)
 	}
 
-	events := make(chan Event, 10)
-	w := New(dir, func(e Event) { events <- e })
+	events := make(chan []Event, 10)
+	w := New(dir, func(batch []Event) { events <- batch })
 	if err := w.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestIgnoredDirectories(t *testing.T) {
 		os.WriteFile(path, []byte("package x"), 0644)
 	}
 
-	_, ok := waitEvent(events, 500*time.Millisecond)
+	_, ok := waitBatch(events, 500*time.Millisecond)
 	if ok {
 		t.Fatal("expected no event for files in ignored directories, but got one")
 	}
@@ -135,8 +135,8 @@ func TestIgnoredDirectories(t *testing.T) {
 func TestNewSubdirectoryWatched(t *testing.T) {
 	dir := t.TempDir()
 
-	events := make(chan Event, 10)
-	w := New(dir, func(e Event) { events <- e })
+	events := make(chan []Event, 10)
+	w := New(dir, func(batch []Event) { events <- batch })
 	if err := w.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -152,11 +152,11 @@ func TestNewSubdirectoryWatched(t *testing.T) {
 	path := filepath.Join(subdir, "index.go")
 	os.WriteFile(path, []byte("package dashboard"), 0644)
 
-	ev, ok := waitEvent(events, 2*time.Second)
+	batch, ok := waitBatch(events, 2*time.Second)
 	if !ok {
 		t.Fatal("expected event for .go file in new subdirectory, got none")
 	}
-	if ev.Kind != "go" {
-		t.Fatalf("expected kind %q, got %q", "go", ev.Kind)
+	if batch[0].Kind != "go" {
+		t.Fatalf("expected kind %q, got %q", "go", batch[0].Kind)
 	}
 }
