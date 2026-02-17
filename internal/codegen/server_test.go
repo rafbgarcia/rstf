@@ -406,6 +406,123 @@ func TestGenerateServer_NoLayout(t *testing.T) {
 	}
 }
 
+func TestGenerateServer_WithApp(t *testing.T) {
+	files := []RouteFile{
+		{
+			Dir:     ".",
+			Package: "myapp",
+			Funcs:   []RouteFunc{{Name: "SSR", ReturnType: "Session", HasContext: true}},
+			Structs: []StructDef{{Name: "Session"}},
+			HasApp:  true,
+		},
+		{
+			Dir:     "routes/dashboard",
+			Package: "dashboard",
+			Funcs:   []RouteFunc{{Name: "SSR", ReturnType: "ServerData", HasContext: true}},
+			Structs: []StructDef{{Name: "ServerData"}},
+		},
+	}
+	deps := map[string][]string{
+		"routes/dashboard": {"routes/dashboard"},
+	}
+
+	got, err := GenerateServer("github.com/user/myapp", files, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectations := []string{
+		// App initialization at startup.
+		"rstfApp := rstf.NewApp()",
+		"app.App(rstfApp)",
+		"defer rstfApp.Close()",
+		// DB wiring in handler.
+		"ctx.DB = rstfApp.DB()",
+	}
+	for _, exp := range expectations {
+		if !strings.Contains(got, exp) {
+			t.Errorf("output missing %q\n\nFull output:\n%s", exp, got)
+		}
+	}
+}
+
+func TestGenerateServer_WithoutApp(t *testing.T) {
+	files := []RouteFile{
+		{
+			Dir:     ".",
+			Package: "myapp",
+			Funcs:   []RouteFunc{{Name: "SSR", ReturnType: "Session", HasContext: true}},
+			Structs: []StructDef{{Name: "Session"}},
+			HasApp:  false,
+		},
+		{
+			Dir:     "routes/dashboard",
+			Package: "dashboard",
+			Funcs:   []RouteFunc{{Name: "SSR", ReturnType: "ServerData", HasContext: true}},
+			Structs: []StructDef{{Name: "ServerData"}},
+		},
+	}
+	deps := map[string][]string{
+		"routes/dashboard": {"routes/dashboard"},
+	}
+
+	got, err := GenerateServer("github.com/user/myapp", files, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should NOT have App-related code.
+	unwanted := []string{
+		"rstfApp",
+		"app.App(",
+		"ctx.DB =",
+	}
+	for _, s := range unwanted {
+		if strings.Contains(got, s) {
+			t.Errorf("output should NOT contain %q when HasApp=false\n\nFull output:\n%s", s, got)
+		}
+	}
+}
+
+func TestGenerateServer_AppOnlyLayout(t *testing.T) {
+	// Layout has App but no SSR function.
+	files := []RouteFile{
+		{
+			Dir:     ".",
+			Package: "myapp",
+			HasApp:  true,
+			// No Funcs — layout configures the app but doesn't return server data.
+		},
+		{
+			Dir:     "routes/dashboard",
+			Package: "dashboard",
+			Funcs:   []RouteFunc{{Name: "SSR", ReturnType: "ServerData", HasContext: true}},
+			Structs: []StructDef{{Name: "ServerData"}},
+		},
+	}
+	deps := map[string][]string{
+		"routes/dashboard": {"routes/dashboard"},
+	}
+
+	got, err := GenerateServer("github.com/user/myapp", files, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have App initialization.
+	if !strings.Contains(got, "rstfApp := rstf.NewApp()") {
+		t.Errorf("output missing App initialization\n\nFull output:\n%s", got)
+	}
+	if !strings.Contains(got, "app.App(rstfApp)") {
+		t.Errorf("output missing app.App call\n\nFull output:\n%s", got)
+	}
+
+	// Should NOT have layout SSR call (no SSR function).
+	if strings.Contains(got, `"main": structToMap`) {
+		t.Errorf("should not have layout SSR entry when layout has no SSR\n\nFull output:\n%s", got)
+	}
+}
+
 func TestParseModulePath(t *testing.T) {
 	tests := []struct {
 		name    string

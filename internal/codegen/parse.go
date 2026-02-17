@@ -46,6 +46,7 @@ type RouteFile struct {
 	Package string      // Go package name
 	Funcs   []RouteFunc // Route handler functions found
 	Structs []StructDef // Struct types referenced by route functions
+	HasApp  bool        // Whether the package exports func App(*rstf.App)
 }
 
 // routeFuncNames are the exported function names the framework recognizes.
@@ -143,14 +144,19 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 		}
 	}
 
-	// Find route handler functions.
+	// Find route handler functions and lifecycle functions.
 	var funcs []RouteFunc
 	referencedStructs := map[string]bool{}
+	hasApp := false
 
 	for _, f := range allFiles {
 		for _, decl := range f.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Recv != nil {
+				continue
+			}
+			if fn.Name.Name == "App" && isAppFunc(fn) {
+				hasApp = true
 				continue
 			}
 			if !routeFuncNames[fn.Name.Name] {
@@ -166,7 +172,7 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 		}
 	}
 
-	if len(funcs) == 0 {
+	if len(funcs) == 0 && !hasApp {
 		return nil, nil
 	}
 
@@ -186,6 +192,7 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 		Package: allFiles[0].Name.Name,
 		Funcs:   funcs,
 		Structs: structs,
+		HasApp:  hasApp,
 	}, nil
 }
 
@@ -228,6 +235,33 @@ func isContextParam(expr ast.Expr) bool {
 		return false
 	}
 	return sel.Sel.Name == "Context"
+}
+
+// isAppFunc checks if a function declaration matches func App(*<pkg>.App).
+// It must have exactly one parameter of type *<pkg>.App and no return values.
+func isAppFunc(fn *ast.FuncDecl) bool {
+	// Must have no return values.
+	if fn.Type.Results != nil && len(fn.Type.Results.List) > 0 {
+		return false
+	}
+	// Must have exactly one parameter.
+	if fn.Type.Params == nil || len(fn.Type.Params.List) != 1 {
+		return false
+	}
+	return isAppParam(fn.Type.Params.List[0].Type)
+}
+
+// isAppParam checks if a type expression is *<pkg>.App.
+func isAppParam(expr ast.Expr) bool {
+	star, ok := expr.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := star.X.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	return sel.Sel.Name == "App"
 }
 
 // resolveType returns the type name and whether it's a slice.

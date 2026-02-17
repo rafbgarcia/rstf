@@ -1,12 +1,16 @@
 package rstf
 
-import "net/http"
+import (
+	"database/sql"
+	"net/http"
+)
 
 // Context is the request-scoped framework context passed to route handlers.
-// It provides access to logging, wide events, and other framework utilities.
+// It provides access to logging, the database connection pool, and other framework utilities.
 type Context struct {
 	Log     *Logger
 	Request *http.Request
+	DB      *sql.DB
 }
 
 // NewContext creates a new Context for the given HTTP request.

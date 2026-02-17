@@ -248,10 +248,23 @@ func writeMain(
 	aliasMap map[string]serverImport,
 	deps map[string][]string,
 ) {
+	hasApp := hasLayout && layout.HasApp
+
 	b.WriteString(`func main() {
 	port := flag.String("port", "3000", "HTTP server port")
 	flag.Parse()
+`)
 
+	if hasApp {
+		imp := aliasMap["."]
+		fmt.Fprintf(b, `
+	rstfApp := rstf.NewApp()
+	%s.App(rstfApp)
+	defer rstfApp.Close()
+`, imp.Alias)
+	}
+
+	b.WriteString(`
 	r := renderer.New()
 	if err := r.Start("."); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start renderer: %s\n", err)
@@ -313,9 +326,15 @@ func writeMain(
 		fmt.Fprintf(b, `
 	rt.Get(%q, func(w http.ResponseWriter, req *http.Request) {
 		ctx := rstf.NewContext(req)
-
-		sd := map[string]map[string]any{
 `, route.urlPattern)
+
+		if hasApp {
+			b.WriteString("\t\tctx.DB = rstfApp.DB()\n")
+		}
+
+		b.WriteString(`
+		sd := map[string]map[string]any{
+`)
 
 		for _, e := range entries {
 			fmt.Fprintf(b, "\t\t\t%q: %s,\n", e.key, e.call)

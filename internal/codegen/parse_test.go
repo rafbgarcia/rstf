@@ -198,6 +198,155 @@ func SSR() ServerData {
 	}
 }
 
+func TestParseDirDetectsAppFunc(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+import rstf "github.com/rafbgarcia/rstf"
+
+type Session struct {
+	UserName string
+}
+
+func App(app *rstf.App) {
+}
+
+func SSR(ctx *rstf.Context) Session {
+	return Session{}
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if !routes[0].HasApp {
+		t.Error("expected HasApp=true when App(*rstf.App) is exported")
+	}
+}
+
+func TestParseDirAppFuncWithAlias(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+import fw "github.com/rafbgarcia/rstf"
+
+type Session struct {
+	UserName string
+}
+
+func App(app *fw.App) {
+}
+
+func SSR(ctx *fw.Context) Session {
+	return Session{}
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if !routes[0].HasApp {
+		t.Error("expected HasApp=true with aliased import")
+	}
+}
+
+func TestParseDirAppFuncWrongSignature(t *testing.T) {
+	dir := t.TempDir()
+	// App with wrong signature should not be detected.
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+type Session struct {
+	UserName string
+}
+
+// Wrong: App takes no args.
+func App() {
+}
+
+func SSR() Session {
+	return Session{}
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if routes[0].HasApp {
+		t.Error("expected HasApp=false for App() with wrong signature")
+	}
+}
+
+func TestParseDirNoAppFunc(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+import rstf "github.com/rafbgarcia/rstf"
+
+type Session struct {
+	UserName string
+}
+
+func SSR(ctx *rstf.Context) Session {
+	return Session{}
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if routes[0].HasApp {
+		t.Error("expected HasApp=false when no App function exists")
+	}
+}
+
+func TestParseDirAppOnlyNoSSR(t *testing.T) {
+	// A package with only App() and no SSR should still be parsed
+	// (the layout might configure the app without returning server data).
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+import rstf "github.com/rafbgarcia/rstf"
+
+func App(app *rstf.App) {
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route (App-only), got %d", len(routes))
+	}
+	if !routes[0].HasApp {
+		t.Error("expected HasApp=true")
+	}
+	if len(routes[0].Funcs) != 0 {
+		t.Errorf("expected 0 route funcs, got %d", len(routes[0].Funcs))
+	}
+}
+
 func TestParseDirSkipsNonStructReturns(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "api", "api.go"), `
