@@ -61,3 +61,8 @@ Search for `*-spec.md` to find all specifications.
 1. Read the relevant spec(s) first.
 2. Implement the code changes.
 3. Update the relevant spec(s), if any.
+
+IMPORTANT:
+
+- TDD whenever feasible (update tests to see it breaks, update code, make sure tests pass)
+- Think first principles. Suggest the appropriate solutions to build robust code and avoid monkeypatches.
