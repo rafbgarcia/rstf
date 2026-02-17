@@ -30,7 +30,7 @@ type ServerData struct {
 func SSR() ServerData { return ServerData{} }
 `)
 
-	got, err := AnalyzeDeps(root, "routes/dashboard/index.tsx")
+	got, err := AnalyzeDeps(root, "routes/dashboard/index.tsx", nil)
 	if err != nil {
 		t.Fatalf("AnalyzeDeps: %v", err)
 	}
@@ -70,7 +70,7 @@ type ServerData struct { Name string }
 func SSR() ServerData { return ServerData{} }
 `)
 
-	got, err := AnalyzeDeps(root, "routes/dashboard/index.tsx")
+	got, err := AnalyzeDeps(root, "routes/dashboard/index.tsx", nil)
 	if err != nil {
 		t.Fatalf("AnalyzeDeps: %v", err)
 	}
@@ -101,7 +101,7 @@ func SSR() ServerData { return ServerData{} }
 export function Button({ children }) { return <button>{children}</button>; }
 `)
 
-	got, err := AnalyzeDeps(root, "routes/dashboard/index.tsx")
+	got, err := AnalyzeDeps(root, "routes/dashboard/index.tsx", nil)
 	if err != nil {
 		t.Fatalf("AnalyzeDeps: %v", err)
 	}
@@ -141,7 +141,7 @@ type ServerData struct { Value string }
 func SSR() ServerData { return ServerData{} }
 `)
 
-	got, err := AnalyzeDeps(root, "routes/page/index.tsx")
+	got, err := AnalyzeDeps(root, "routes/page/index.tsx", nil)
 	if err != nil {
 		t.Fatalf("AnalyzeDeps: %v", err)
 	}
@@ -170,7 +170,7 @@ import { View } from "../../routes/cycle/index";
 export function Other() { return <View />; }
 `)
 
-	got, err := AnalyzeDeps(root, "routes/cycle/index.tsx")
+	got, err := AnalyzeDeps(root, "routes/cycle/index.tsx", nil)
 	if err != nil {
 		t.Fatalf("AnalyzeDeps: %v", err)
 	}
@@ -196,7 +196,7 @@ type ServerData struct {}
 func SSR() ServerData { return ServerData{} }
 `)
 
-	got, err := AnalyzeDeps(root, "routes/page/index.tsx")
+	got, err := AnalyzeDeps(root, "routes/page/index.tsx", nil)
 	if err != nil {
 		t.Fatalf("AnalyzeDeps: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestAnalyzeDeps_RouteWithoutGoFile(t *testing.T) {
 export function View() { return <div>About</div>; }
 `)
 
-	got, err := AnalyzeDeps(root, "routes/about/index.tsx")
+	got, err := AnalyzeDeps(root, "routes/about/index.tsx", nil)
 	if err != nil {
 		t.Fatalf("AnalyzeDeps: %v", err)
 	}
@@ -242,7 +242,7 @@ type ServerData struct {}
 func SSR() ServerData { return ServerData{} }
 `)
 
-	got, err := AnalyzeDeps(root, "routes/page/index.tsx")
+	got, err := AnalyzeDeps(root, "routes/page/index.tsx", nil)
 	if err != nil {
 		t.Fatalf("AnalyzeDeps: %v", err)
 	}

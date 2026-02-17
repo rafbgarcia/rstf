@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/rafbgarcia/rstf/internal/conventions"
 )
@@ -20,11 +22,19 @@ type GenerateResult struct {
 // existing .rstf/ output, parses Go route files, analyzes TSX dependencies,
 // and writes all generated files (.d.ts, runtime modules, hydration entries,
 // server_gen.go).
+//
+// The pipeline parallelizes independent work:
+//   - Phase 1 (sequential): clean, read go.mod, parse Go files, create dirs
+//   - Phase 2 (parallel): AnalyzeDeps per route, DTS + runtime writes per file, symlinks
+//   - Phase 3 (parallel): hydration entries per route (needs deps from Phase 2)
+//   - Phase 4 (sequential): server_gen.go, ensureDeps
 func Generate(projectRoot string) (GenerateResult, error) {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("resolving project root: %w", err)
 	}
+
+	// --- Phase 1: sequential setup ---
 
 	// 1. Clean slate — remove .rstf/ since everything in it is generated.
 	rstfDir := filepath.Join(absRoot, ".rstf")
@@ -48,43 +58,7 @@ func Generate(projectRoot string) (GenerateResult, error) {
 		return GenerateResult{}, fmt.Errorf("parsing project: %w", err)
 	}
 
-	// 4. Analyze TSX dependencies for each route directory.
-	// Also discover TSX-only routes (no .go file but has index.tsx).
-	deps := map[string][]string{}
-	for _, f := range files {
-		if !conventions.IsRouteDir(f.Dir) {
-			continue
-		}
-		entryPath := filepath.Join(f.Dir, "index.tsx")
-		absEntry := filepath.Join(absRoot, entryPath)
-		if _, err := os.Stat(absEntry); os.IsNotExist(err) {
-			continue
-		}
-		d, err := AnalyzeDeps(absRoot, entryPath)
-		if err != nil {
-			return GenerateResult{}, fmt.Errorf("analyzing deps for %s: %w", f.Dir, err)
-		}
-		deps[f.Dir] = d
-	}
-
-	// Also check for TSX-only route dirs that weren't discovered via ParseDir.
-	tsxRouteDirs, err := discoverTSXRouteDirs(absRoot)
-	if err != nil {
-		return GenerateResult{}, fmt.Errorf("discovering TSX routes: %w", err)
-	}
-	for _, routeDir := range tsxRouteDirs {
-		if _, exists := deps[routeDir]; exists {
-			continue
-		}
-		entryPath := filepath.Join(routeDir, "index.tsx")
-		d, err := AnalyzeDeps(absRoot, entryPath)
-		if err != nil {
-			return GenerateResult{}, fmt.Errorf("analyzing deps for %s: %w", routeDir, err)
-		}
-		deps[routeDir] = d
-	}
-
-	// 5. Create .rstf/ directory structure.
+	// Create .rstf/ directory structure before any parallel writes.
 	for _, dir := range []string{
 		filepath.Join(rstfDir, "types"),
 		filepath.Join(rstfDir, "generated"),
@@ -95,9 +69,110 @@ func Generate(projectRoot string) (GenerateResult, error) {
 		}
 	}
 
+	// Collect all route entries that need dependency analysis.
+	// Includes both Go+TSX routes and TSX-only routes.
+	type depJob struct {
+		dir       string
+		entryPath string
+	}
+	var depJobs []depJob
+	seenDirs := map[string]bool{}
+
+	for _, f := range files {
+		if !conventions.IsRouteDir(f.Dir) {
+			continue
+		}
+		entryPath := filepath.Join(f.Dir, "index.tsx")
+		absEntry := filepath.Join(absRoot, entryPath)
+		if _, err := os.Stat(absEntry); os.IsNotExist(err) {
+			continue
+		}
+		depJobs = append(depJobs, depJob{f.Dir, entryPath})
+		seenDirs[f.Dir] = true
+	}
+
+	tsxRouteDirs, err := discoverTSXRouteDirs(absRoot)
+	if err != nil {
+		return GenerateResult{}, fmt.Errorf("discovering TSX routes: %w", err)
+	}
+	for _, routeDir := range tsxRouteDirs {
+		if seenDirs[routeDir] {
+			continue
+		}
+		depJobs = append(depJobs, depJob{routeDir, filepath.Join(routeDir, "index.tsx")})
+	}
+
+	// --- Phase 2: parallel AnalyzeDeps + DTS/runtime writes + symlinks ---
+
+	var mu sync.Mutex
+	deps := map[string][]string{}
+	cache := newFSCache()
+
+	sem := make(chan struct{}, runtime.NumCPU())
+	var wg sync.WaitGroup
+	var firstErr error
+
+	setErr := func(err error) {
+		mu.Lock()
+		if firstErr == nil {
+			firstErr = err
+		}
+		mu.Unlock()
+	}
+
+	// 4. Parallel AnalyzeDeps for each route.
+	for _, job := range depJobs {
+		wg.Add(1)
+		go func(dir, entryPath string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			d, err := AnalyzeDeps(absRoot, entryPath, cache)
+			if err != nil {
+				setErr(fmt.Errorf("analyzing deps for %s: %w", dir, err))
+				return
+			}
+			mu.Lock()
+			deps[dir] = d
+			mu.Unlock()
+		}(job.dir, job.entryPath)
+	}
+
+	// 7. Parallel DTS and runtime module writes for each RouteFile.
+	for _, rf := range files {
+		wg.Add(1)
+		go func(rf RouteFile) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			// Write .d.ts file.
+			dtsPath := filepath.Join(rstfDir, "types", dtsFileName(rf.Dir))
+			dts := GenerateDTS(rf)
+			if err := os.WriteFile(dtsPath, []byte(dts), 0644); err != nil {
+				setErr(fmt.Errorf("writing %s: %w", dtsPath, err))
+				return
+			}
+
+			// Write runtime module.
+			rtMod := GenerateRuntimeModule(rf, componentPathForDir(rf.Dir))
+			if rtMod != "" {
+				rtPath := filepath.Join(rstfDir, "generated", runtimeModulePath(rf.Dir))
+				if err := os.MkdirAll(filepath.Dir(rtPath), 0755); err != nil {
+					setErr(fmt.Errorf("creating dir for %s: %w", rtPath, err))
+					return
+				}
+				if err := os.WriteFile(rtPath, []byte(rtMod), 0644); err != nil {
+					setErr(fmt.Errorf("writing %s: %w", rtPath, err))
+					return
+				}
+			}
+		}(rf)
+	}
+
 	// 6. Create symlinks for directories with $ (dynamic segments).
-	// Go rejects $ in import paths, so we create .rstf/pkgs/<sanitized>/
-	// pointing to the real directory, and server_gen.go imports that path.
+	// Sequential — few entries, and must complete before server_gen.go.
 	for _, f := range files {
 		if !strings.Contains(f.Dir, "$") || f.Dir == "." {
 			continue
@@ -112,42 +187,42 @@ func Generate(projectRoot string) (GenerateResult, error) {
 		}
 	}
 
-	// 7. Generate DTS and runtime modules for each RouteFile.
-	for _, rf := range files {
-		// Write .d.ts file.
-		dtsName := dtsFileName(rf.Dir)
-		dtsPath := filepath.Join(rstfDir, "types", dtsName)
-		dts := GenerateDTS(rf)
-		if err := os.WriteFile(dtsPath, []byte(dts), 0644); err != nil {
-			return GenerateResult{}, fmt.Errorf("writing %s: %w", dtsPath, err)
-		}
-
-		// Write runtime module.
-		rtMod := GenerateRuntimeModule(rf, componentPathForDir(rf.Dir))
-		if rtMod != "" {
-			rtPath := filepath.Join(rstfDir, "generated", runtimeModulePath(rf.Dir))
-			if err := os.MkdirAll(filepath.Dir(rtPath), 0755); err != nil {
-				return GenerateResult{}, fmt.Errorf("creating dir for %s: %w", rtPath, err)
-			}
-			if err := os.WriteFile(rtPath, []byte(rtMod), 0644); err != nil {
-				return GenerateResult{}, fmt.Errorf("writing %s: %w", rtPath, err)
-			}
-		}
+	wg.Wait()
+	if firstErr != nil {
+		return GenerateResult{}, firstErr
 	}
 
-	// 8. Generate hydration entries for each route.
+	// --- Phase 3: parallel hydration entries (needs deps from Phase 2) ---
+
 	entries := map[string]string{}
 	for routeDir, routeDeps := range deps {
 		if !conventions.IsRouteDir(routeDir) {
 			continue
 		}
-		entryContent := GenerateHydrationEntry(routeDir, routeDeps)
-		entryPath := filepath.Join(rstfDir, "entries", entryFileName(routeDir))
-		if err := os.WriteFile(entryPath, []byte(entryContent), 0644); err != nil {
-			return GenerateResult{}, fmt.Errorf("writing entry %s: %w", entryPath, err)
-		}
-		entries[routeDir] = entryPath
+		wg.Add(1)
+		go func(routeDir string, routeDeps []string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			entryContent := GenerateHydrationEntry(routeDir, routeDeps)
+			entryPath := filepath.Join(rstfDir, "entries", entryFileName(routeDir))
+			if err := os.WriteFile(entryPath, []byte(entryContent), 0644); err != nil {
+				setErr(fmt.Errorf("writing entry %s: %w", entryPath, err))
+				return
+			}
+			mu.Lock()
+			entries[routeDir] = entryPath
+			mu.Unlock()
+		}(routeDir, routeDeps)
 	}
+
+	wg.Wait()
+	if firstErr != nil {
+		return GenerateResult{}, firstErr
+	}
+
+	// --- Phase 4: sequential finalization ---
 
 	// 9. Generate server_gen.go.
 	serverCode, err := GenerateServer(modulePath, files, deps)

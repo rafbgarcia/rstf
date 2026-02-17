@@ -129,12 +129,28 @@ The generated server declares `package main` with `func main()`, imports the use
 
 ## Generation pipeline
 
+The pipeline parallelizes independent work across four phases:
+
+**Phase 1 — sequential setup:**
+
 1. Remove `.rstf/` (clean slate)
 2. Read module path from `go.mod`
-3. Discover all Go files with `SSR` functions via AST parsing (skips `.rstf/`)
-4. Analyze TSX import dependencies per route
-5. Create symlinks for directories with `$` in their names (see Server generation)
-6. Write `.d.ts` types and runtime modules for each component
-7. Generate hydration entry files (`.rstf/entries/`)
-8. Generate `server_gen.go`
-9. Resolve framework dependencies via `go get` (skipped when developing the framework itself or when the framework module is already in `go.sum`) — `server_gen.go` lives in `.rstf/` (dot-prefixed, invisible to `go mod tidy`), so its transitive deps (e.g. chi via `rstf/router`) must be added to `go.sum` explicitly on first run
+3. Discover all Go files with `SSR` functions via AST parsing (skips `.rstf/`, `.git`, `node_modules`, `vendor`)
+4. Create `.rstf/` directory structure
+
+**Phase 2 — parallel (all independent after Parse):**
+
+5. Analyze TSX import dependencies per route (parallel, shared filesystem cache across routes)
+6. Write `.d.ts` types and runtime modules for each component (parallel per file)
+7. Create symlinks for directories with `$` in their names (see Server generation)
+
+**Phase 3 — parallel (needs deps from Phase 2):**
+
+8. Generate hydration entry files `.rstf/entries/` (parallel per route)
+
+**Phase 4 — sequential finalization:**
+
+9. Generate `server_gen.go`
+10. Resolve framework dependencies via `go get` (skipped when developing the framework itself or when the framework module is already in `go.sum`) — `server_gen.go` lives in `.rstf/` (dot-prefixed, invisible to `go mod tidy`), so its transitive deps (e.g. chi via `rstf/router`) must be added to `go.sum` explicitly on first run
+
+**Performance:** A shared `fsCache` avoids redundant file reads and directory listings when multiple routes import the same TSX files. Concurrency is bounded by `runtime.NumCPU()`.

@@ -60,10 +60,14 @@ func ParseDir(rootDir string) ([]RouteFile, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() && d.Name() == ".rstf" {
-			return filepath.SkipDir
+		if d.IsDir() {
+			switch d.Name() {
+			case ".rstf", ".git", "node_modules", "vendor":
+				return filepath.SkipDir
+			}
+			return nil
 		}
-		if d.IsDir() || filepath.Ext(path) != ".go" {
+		if filepath.Ext(path) != ".go" {
 			return nil
 		}
 		dir := filepath.Dir(path)
