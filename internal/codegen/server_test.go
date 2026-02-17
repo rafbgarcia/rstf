@@ -1,9 +1,77 @@
 package codegen
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+// assemblePage mirrors the generated assemblePage function from writeAssemblePage
+// so we can unit-test the CSS link injection logic directly.
+func assemblePage(html string, serverData map[string]map[string]any, bundlePath string, cssPath string) string {
+	sdJSON, _ := json.Marshal(serverData)
+	dataScript := "<script>window.__RSTF_SERVER_DATA__ = " + string(sdJSON) + "</script>"
+	bundleScript := "<script src=\"" + bundlePath + "\"></script>"
+	page := "<!DOCTYPE html>" + html
+	if cssPath != "" {
+		page = strings.Replace(page, "</head>", "<link rel=\"stylesheet\" href=\""+cssPath+"\">\n</head>", 1)
+	}
+	page = strings.Replace(page, "</body>", dataScript+bundleScript+"</body>", 1)
+	return page
+}
+
+func TestAssemblePage_WithCSS(t *testing.T) {
+	html := "<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>"
+	sd := map[string]map[string]any{"main": {"key": "val"}}
+	cssPath := "/.rstf/static/main.css"
+
+	got := assemblePage(html, sd, "/.rstf/static/dashboard/bundle.js", cssPath)
+
+	checks := []struct {
+		desc string
+		want string
+	}{
+		{"doctype", "<!DOCTYPE html>"},
+		{"css link tag", `<link rel="stylesheet" href="/.rstf/static/main.css">`},
+		{"css before </head>", `main.css">` + "\n</head>"},
+		{"data script", `window.__RSTF_SERVER_DATA__`},
+		{"bundle script", `<script src="/.rstf/static/dashboard/bundle.js"></script>`},
+	}
+	for _, c := range checks {
+		if !strings.Contains(got, c.want) {
+			t.Errorf("%s: output missing %q\n\nFull output:\n%s", c.desc, c.want, got)
+		}
+	}
+
+	// CSS link must appear before </head>, not in the body.
+	linkIdx := strings.Index(got, `<link rel="stylesheet"`)
+	headIdx := strings.Index(got, "</head>")
+	bodyIdx := strings.Index(got, "<body>")
+	if linkIdx > headIdx {
+		t.Errorf("CSS link should appear before </head>")
+	}
+	if linkIdx > bodyIdx {
+		t.Errorf("CSS link should appear before <body>")
+	}
+}
+
+func TestAssemblePage_WithoutCSS(t *testing.T) {
+	html := "<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>"
+	sd := map[string]map[string]any{"main": {"key": "val"}}
+
+	got := assemblePage(html, sd, "/.rstf/static/dashboard/bundle.js", "")
+
+	if strings.Contains(got, "<link") {
+		t.Errorf("should not contain <link> tag when cssPath is empty\n\nFull output:\n%s", got)
+	}
+
+	// Should still have doctype and scripts.
+	for _, want := range []string{"<!DOCTYPE html>", "window.__RSTF_SERVER_DATA__", `<script src="`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("output missing %q\n\nFull output:\n%s", want, got)
+		}
+	}
+}
 
 func TestGenerateServer_SingleRoute(t *testing.T) {
 	files := []RouteFile{
