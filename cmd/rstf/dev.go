@@ -17,10 +17,16 @@ import (
 )
 
 func runDev(port string) {
-	// Step 1: Run codegen.
+	// Step 1: Create generator and run initial codegen.
+	gen, err := codegen.NewGenerator(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "codegen init error: %s\n", err)
+		os.Exit(1)
+	}
+
 	fmt.Print("  Codegen ......... ")
 	t := time.Now()
-	result, err := codegen.Generate(".")
+	result, err := gen.Generate()
 	if err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "codegen error: %s\n", err)
@@ -57,8 +63,8 @@ func runDev(port string) {
 	// Step 5: Start file watcher.
 	fmt.Println("\n  Watching for changes...")
 
-	eventCh := make(chan watcher.Event, 100)
-	w := watcher.New(".", func(e watcher.Event) { eventCh <- e })
+	eventCh := make(chan []watcher.Event, 100)
+	w := watcher.New(".", func(batch []watcher.Event) { eventCh <- batch })
 	if err := w.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "watcher error: %s\n", err)
 		os.Exit(1)
@@ -70,16 +76,29 @@ func runDev(port string) {
 
 	for {
 		select {
-		case ev := <-eventCh:
-			switch ev.Kind {
-			case "go":
+		case batch := <-eventCh:
+			// Classify batch into change kinds.
+			var hasGo, hasTsx, hasCss bool
+			for _, ev := range batch {
+				switch ev.Kind {
+				case "go":
+					hasGo = true
+				case "tsx":
+					hasTsx = true
+				case "css":
+					hasCss = true
+				}
+			}
+
+			// Print changed files.
+			for _, ev := range batch {
 				fmt.Printf("\n  [change] %s\n", ev.Path)
-				server = handleGoChange(server, &result, port)
-			case "tsx":
-				fmt.Printf("\n  [change] %s\n", ev.Path)
-				handleTsxChange(result.Entries)
-			case "css":
-				fmt.Printf("\n  [change] %s\n", ev.Path)
+			}
+
+			if hasGo || hasTsx {
+				server = handleCodeChange(gen, server, &result, port, batch, hasGo)
+			}
+			if hasCss {
 				handleCssChange()
 			}
 
@@ -91,23 +110,38 @@ func runDev(port string) {
 	}
 }
 
-// handleGoChange re-runs codegen, re-bundles, kills the server, and restarts.
-func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult, port string) *exec.Cmd {
-	stopServer(server)
+// handleCodeChange runs incremental codegen, re-bundles, and restarts the
+// server if Go files changed or the server_gen.go content changed.
+func handleCodeChange(gen *codegen.Generator, server *exec.Cmd, result *codegen.GenerateResult, port string, batch []watcher.Event, hasGo bool) *exec.Cmd {
+	if hasGo {
+		stopServer(server)
+	}
+
+	// Convert watcher events to codegen change events.
+	var events []codegen.ChangeEvent
+	for _, ev := range batch {
+		if ev.Kind == "go" || ev.Kind == "tsx" {
+			events = append(events, codegen.ChangeEvent{Path: ev.Path, Kind: ev.Kind})
+		}
+	}
 
 	fmt.Print("  Codegen ......... ")
 	t := time.Now()
-	newResult, err := codegen.Generate(".")
+	regenResult, err := gen.Regenerate(events)
 	if err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "  codegen error: %s\n", err)
-		return startServer(port) // restart with old code
+		if hasGo {
+			fmt.Printf("  HTTP server ..... restarting on :%s\n", port)
+			return startServer(port)
+		}
+		return server
 	}
-	fmt.Printf("done (%d routes) [%s]\n", newResult.RouteCount, fmtDuration(time.Since(t)))
+	fmt.Printf("done (%d routes) [%s]\n", regenResult.RouteCount, fmtDuration(time.Since(t)))
 
 	fmt.Print("  Client bundles .. ")
 	t = time.Now()
-	if err := bundler.BundleEntries(".", newResult.Entries); err != nil {
+	if err := bundler.BundleEntries(".", regenResult.Entries); err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "  bundling error: %s\n", err)
 	} else {
@@ -118,28 +152,16 @@ func handleGoChange(server *exec.Cmd, result *codegen.GenerateResult, port strin
 		fmt.Fprintf(os.Stderr, "  css error: %s\n", err)
 	}
 
-	*result = newResult
-	fmt.Printf("  HTTP server ..... restarting on :%s\n", port)
-	return startServer(port)
-}
+	*result = regenResult.GenerateResult
 
-// handleTsxChange re-bundles client JS, rebuilds CSS (Tailwind scans TSX for
-// class names), and invalidates the sidecar module cache.
-func handleTsxChange(entries map[string]string) {
-	fmt.Print("  Client bundles .. ")
-	t := time.Now()
-	if err := bundler.BundleEntries(".", entries); err != nil {
-		fmt.Println("FAILED")
-		fmt.Fprintf(os.Stderr, "  bundling error: %s\n", err)
-		return
-	}
-	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
-
-	if err := buildCSS(); err != nil {
-		fmt.Fprintf(os.Stderr, "  css error: %s\n", err)
+	if hasGo || regenResult.ServerChanged {
+		fmt.Printf("  HTTP server ..... restarting on :%s\n", port)
+		return startServer(port)
 	}
 
+	// TSX-only change with no server_gen.go diff — just invalidate sidecar.
 	invalidateSidecar()
+	return server
 }
 
 // handleCssChange rebuilds CSS. No JS rebundle or sidecar invalidation needed

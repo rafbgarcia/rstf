@@ -127,30 +127,53 @@ The generated server declares `package main` with `func main()`, imports the use
 - Page assembly: wraps rendered HTML with `<!DOCTYPE html>`, injects optional `<link rel="stylesheet">` before `</head>` (if `.rstf/static/main.css` exists at server startup), and injects `__RSTF_SERVER_DATA__` script and hydration bundle script before `</body>`.
 - Directories with `$` (dynamic segments) cannot be used directly as Go import paths. Codegen creates symlinks under `.rstf/pkgs/` with `$` stripped (e.g. `.rstf/pkgs/routes/sites.id` → `routes/sites.$id`) and imports those paths instead.
 
-## Generation pipeline
+## Generator struct
+
+A `Generator` struct persists state between codegen runs. Two entry points:
+
+- **`Generate()`** — full pipeline (startup). Removes `.rstf/`, parses everything, writes all files, populates internal state.
+- **`Regenerate(events)`** — incremental pipeline (file changes). Re-parses only changed Go directories, re-analyzes deps with a warm filesystem cache, diffs outputs, writes only what changed.
+
+The standalone `Generate(projectRoot)` function is a wrapper that creates a throwaway Generator — existing tests and one-shot callers work without change.
+
+### Regenerate logic
+
+1. Classify events into Go-changed dirs and TSX-changed flag
+2. Invalidate `fsCache` entries for changed paths
+3. For each Go-changed dir: `ParseSingleDir` → update/remove from `filesByDir` → write DTS + runtime module
+4. Rebuild files slice from `filesByDir`
+5. Re-create `$` symlinks for changed dirs
+6. Re-discover TSX-only routes
+7. Re-run `AnalyzeDeps` for all routes (parallel, warm cache — fast because only invalidated entries re-read from disk)
+8. Diff old vs new deps per route → only write hydration entries that changed
+9. Generate `server_gen.go` content, compare with previous → write only if different, set `ServerChanged`
+10. Update cached state
+
+`RegenerateResult` extends `GenerateResult` with a `ServerChanged` bool so the caller knows whether to restart the Go server.
+
+## Generation pipeline (full — Generate)
 
 The pipeline parallelizes independent work across four phases:
 
 **Phase 1 — sequential setup:**
 
 1. Remove `.rstf/` (clean slate)
-2. Read module path from `go.mod`
-3. Discover all Go files with `SSR` functions via AST parsing (skips `.rstf/`, `.git`, `node_modules`, `vendor`)
-4. Create `.rstf/` directory structure
+2. Parse all Go route files via AST (skips `.rstf/`, `.git`, `node_modules`, `vendor`)
+3. Create `.rstf/` directory structure
 
 **Phase 2 — parallel (all independent after Parse):**
 
-5. Analyze TSX import dependencies per route (parallel, shared filesystem cache across routes)
-6. Write `.d.ts` types and runtime modules for each component (parallel per file)
-7. Create symlinks for directories with `$` in their names (see Server generation)
+4. Analyze TSX import dependencies per route (parallel, shared filesystem cache across routes)
+5. Write `.d.ts` types and runtime modules for each component (parallel per file)
+6. Create symlinks for directories with `$` in their names (see Server generation)
 
 **Phase 3 — parallel (needs deps from Phase 2):**
 
-8. Generate hydration entry files `.rstf/entries/` (parallel per route)
+7. Generate hydration entry files `.rstf/entries/` (parallel per route)
 
 **Phase 4 — sequential finalization:**
 
-9. Generate `server_gen.go`
-10. Resolve framework dependencies via `go get` (skipped when developing the framework itself or when the framework module is already in `go.sum`) — `server_gen.go` lives in `.rstf/` (dot-prefixed, invisible to `go mod tidy`), so its transitive deps (e.g. chi via `rstf/router`) must be added to `go.sum` explicitly on first run
+8. Generate `server_gen.go`
+9. Resolve framework dependencies via `go get` (skipped when developing the framework itself or when the framework module is already in `go.sum`) — `server_gen.go` lives in `.rstf/` (dot-prefixed, invisible to `go mod tidy`), so its transitive deps (e.g. chi via `rstf/router`) must be added to `go.sum` explicitly on first run
 
-**Performance:** A shared `fsCache` avoids redundant file reads and directory listings when multiple routes import the same TSX files. Concurrency is bounded by `runtime.NumCPU()`.
+**Performance:** A shared `fsCache` avoids redundant file reads and directory listings when multiple routes import the same TSX files. The cache persists across `Regenerate` calls — only invalidated entries are re-read from disk. Concurrency is bounded by `runtime.NumCPU()`.

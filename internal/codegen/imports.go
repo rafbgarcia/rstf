@@ -34,6 +34,17 @@ func newFSCache() *fsCache {
 	}
 }
 
+// invalidatePaths removes cached data for the given absolute paths so that
+// subsequent AnalyzeDeps calls re-read them from disk.
+func (c *fsCache) invalidatePaths(paths []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, p := range paths {
+		delete(c.files, p)
+		delete(c.hasGo, filepath.Dir(p))
+	}
+}
+
 // readFile returns cached file content, reading from disk on first access.
 func (c *fsCache) readFile(absPath string) ([]byte, error) {
 	c.mu.Lock()

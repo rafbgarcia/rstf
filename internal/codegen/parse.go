@@ -14,6 +14,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -89,6 +90,31 @@ func ParseDir(rootDir string) ([]RouteFile, error) {
 		}
 	}
 	return results, nil
+}
+
+// ParseSingleDir parses a single directory's Go files and returns a RouteFile.
+// Returns nil if the directory doesn't exist or has no .go files with route functions.
+// absDir must be an absolute path; rootDir is the project root (also absolute).
+func ParseSingleDir(rootDir, absDir string) (*RouteFile, error) {
+	entries, err := os.ReadDir(absDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var goFiles []string
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".go" {
+			goFiles = append(goFiles, filepath.Join(absDir, e.Name()))
+		}
+	}
+	if len(goFiles) == 0 {
+		return nil, nil
+	}
+
+	return parseRouteDir(rootDir, absDir, goFiles)
 }
 
 // parseRouteDir parses all Go files in a single route directory.
