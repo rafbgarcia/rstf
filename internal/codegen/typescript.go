@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 // Namespace returns the PascalCase namespace name for a route directory path.
@@ -19,7 +20,9 @@ func Namespace(dir string) string {
 		if part == "" {
 			continue
 		}
-		for _, seg := range strings.Split(part, "-") {
+		for _, seg := range strings.FieldsFunc(part, func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		}) {
 			result.WriteString(ucFirst(seg))
 		}
 	}
