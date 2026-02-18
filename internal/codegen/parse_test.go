@@ -198,7 +198,7 @@ func SSR() ServerData {
 	}
 }
 
-func TestParseDirDetectsAppFunc(t *testing.T) {
+func TestParseDirDetectsOnServerStart(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
 package myapp
@@ -209,7 +209,7 @@ type Session struct {
 	UserName string
 }
 
-func App(app *rstf.App) {
+func OnServerStart(app *rstf.App) {
 }
 
 func SSR(ctx *rstf.Context) Session {
@@ -224,12 +224,12 @@ func SSR(ctx *rstf.Context) Session {
 	if len(routes) != 1 {
 		t.Fatalf("expected 1 route, got %d", len(routes))
 	}
-	if !routes[0].HasApp {
-		t.Error("expected HasApp=true when App(*rstf.App) is exported")
+	if !routes[0].HasOnServerStart {
+		t.Error("expected HasOnServerStart=true when OnServerStart(*rstf.App) is exported")
 	}
 }
 
-func TestParseDirAppFuncWithAlias(t *testing.T) {
+func TestParseDirOnServerStartWithAlias(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
 package myapp
@@ -240,7 +240,7 @@ type Session struct {
 	UserName string
 }
 
-func App(app *fw.App) {
+func OnServerStart(app *fw.App) {
 }
 
 func SSR(ctx *fw.Context) Session {
@@ -255,14 +255,14 @@ func SSR(ctx *fw.Context) Session {
 	if len(routes) != 1 {
 		t.Fatalf("expected 1 route, got %d", len(routes))
 	}
-	if !routes[0].HasApp {
-		t.Error("expected HasApp=true with aliased import")
+	if !routes[0].HasOnServerStart {
+		t.Error("expected HasOnServerStart=true with aliased import")
 	}
 }
 
-func TestParseDirAppFuncWrongSignature(t *testing.T) {
+func TestParseDirOnServerStartWrongSignature(t *testing.T) {
 	dir := t.TempDir()
-	// App with wrong signature should not be detected.
+	// OnServerStart with wrong signature should not be detected.
 	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
 package myapp
 
@@ -270,8 +270,8 @@ type Session struct {
 	UserName string
 }
 
-// Wrong: App takes no args.
-func App() {
+// Wrong: OnServerStart takes no args.
+func OnServerStart() {
 }
 
 func SSR() Session {
@@ -286,12 +286,12 @@ func SSR() Session {
 	if len(routes) != 1 {
 		t.Fatalf("expected 1 route, got %d", len(routes))
 	}
-	if routes[0].HasApp {
-		t.Error("expected HasApp=false for App() with wrong signature")
+	if routes[0].HasOnServerStart {
+		t.Error("expected HasOnServerStart=false for OnServerStart() with wrong signature")
 	}
 }
 
-func TestParseDirNoAppFunc(t *testing.T) {
+func TestParseDirNoOnServerStart(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
 package myapp
@@ -314,13 +314,13 @@ func SSR(ctx *rstf.Context) Session {
 	if len(routes) != 1 {
 		t.Fatalf("expected 1 route, got %d", len(routes))
 	}
-	if routes[0].HasApp {
-		t.Error("expected HasApp=false when no App function exists")
+	if routes[0].HasOnServerStart {
+		t.Error("expected HasOnServerStart=false when no OnServerStart function exists")
 	}
 }
 
-func TestParseDirAppOnlyNoSSR(t *testing.T) {
-	// A package with only App() and no SSR should still be parsed
+func TestParseDirOnServerStartOnlyNoSSR(t *testing.T) {
+	// A package with only OnServerStart() and no SSR should still be parsed
 	// (the layout might configure the app without returning server data).
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
@@ -328,7 +328,7 @@ package myapp
 
 import rstf "github.com/rafbgarcia/rstf"
 
-func App(app *rstf.App) {
+func OnServerStart(app *rstf.App) {
 }
 `)
 
@@ -337,13 +337,180 @@ func App(app *rstf.App) {
 		t.Fatalf("ParseDir: %v", err)
 	}
 	if len(routes) != 1 {
-		t.Fatalf("expected 1 route (App-only), got %d", len(routes))
+		t.Fatalf("expected 1 route (OnServerStart-only), got %d", len(routes))
 	}
-	if !routes[0].HasApp {
-		t.Error("expected HasApp=true")
+	if !routes[0].HasOnServerStart {
+		t.Error("expected HasOnServerStart=true")
 	}
 	if len(routes[0].Funcs) != 0 {
 		t.Errorf("expected 0 route funcs, got %d", len(routes[0].Funcs))
+	}
+}
+
+func TestParseDirDetectsAroundRequest(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+import rstf "github.com/rafbgarcia/rstf"
+
+type Session struct {
+	UserName string
+}
+
+func AroundRequest() []rstf.Middleware {
+	return nil
+}
+
+func SSR(ctx *rstf.Context) Session {
+	return Session{}
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if !routes[0].HasAroundRequest {
+		t.Error("expected HasAroundRequest=true when AroundRequest() []rstf.Middleware is exported")
+	}
+}
+
+func TestParseDirAroundRequestWithAlias(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+import fw "github.com/rafbgarcia/rstf"
+
+type Session struct {
+	UserName string
+}
+
+func AroundRequest() []fw.Middleware {
+	return nil
+}
+
+func SSR(ctx *fw.Context) Session {
+	return Session{}
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if !routes[0].HasAroundRequest {
+		t.Error("expected HasAroundRequest=true with aliased import")
+	}
+}
+
+func TestParseDirAroundRequestWrongSignature(t *testing.T) {
+	dir := t.TempDir()
+	// AroundRequest with params should not be detected.
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+import "net/http"
+
+type Session struct {
+	UserName string
+}
+
+// Wrong: AroundRequest takes a param and returns single middleware.
+func AroundRequest(next http.Handler) http.Handler {
+	return next
+}
+
+func SSR() Session {
+	return Session{}
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if routes[0].HasAroundRequest {
+		t.Error("expected HasAroundRequest=false for AroundRequest with wrong signature")
+	}
+}
+
+func TestParseDirAroundRequestOnlyNoSSR(t *testing.T) {
+	// A package with only AroundRequest() and no SSR should still be parsed.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+import rstf "github.com/rafbgarcia/rstf"
+
+func AroundRequest() []rstf.Middleware {
+	return nil
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route (AroundRequest-only), got %d", len(routes))
+	}
+	if !routes[0].HasAroundRequest {
+		t.Error("expected HasAroundRequest=true")
+	}
+	if len(routes[0].Funcs) != 0 {
+		t.Errorf("expected 0 route funcs, got %d", len(routes[0].Funcs))
+	}
+}
+
+func TestParseDirBothConventions(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `
+package myapp
+
+import rstf "github.com/rafbgarcia/rstf"
+
+type Session struct {
+	UserName string
+}
+
+func OnServerStart(app *rstf.App) {
+}
+
+func AroundRequest() []rstf.Middleware {
+	return nil
+}
+
+func SSR(ctx *rstf.Context) Session {
+	return Session{}
+}
+`)
+
+	routes, err := ParseDir(dir)
+	if err != nil {
+		t.Fatalf("ParseDir: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(routes))
+	}
+	if !routes[0].HasOnServerStart {
+		t.Error("expected HasOnServerStart=true")
+	}
+	if !routes[0].HasAroundRequest {
+		t.Error("expected HasAroundRequest=true")
+	}
+	if len(routes[0].Funcs) != 1 {
+		t.Errorf("expected 1 route func (SSR), got %d", len(routes[0].Funcs))
 	}
 }
 

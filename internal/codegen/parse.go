@@ -42,11 +42,12 @@ type StructField struct {
 
 // RouteFile is the result of parsing a single route directory.
 type RouteFile struct {
-	Dir     string      // Relative directory path (e.g. "dashboard")
-	Package string      // Go package name
-	Funcs   []RouteFunc // Route handler functions found
-	Structs []StructDef // Struct types referenced by route functions
-	HasApp  bool        // Whether the package exports func App(*rstf.App)
+	Dir              string      // Relative directory path (e.g. "dashboard")
+	Package          string      // Go package name
+	Funcs            []RouteFunc // Route handler functions found
+	Structs          []StructDef // Struct types referenced by route functions
+	HasOnServerStart bool        // Whether the package exports func OnServerStart(*rstf.App)
+	HasAroundRequest bool        // Whether the package exports func AroundRequest() []rstf.Middleware
 }
 
 // routeFuncNames are the exported function names the framework recognizes.
@@ -147,7 +148,8 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 	// Find route handler functions and lifecycle functions.
 	var funcs []RouteFunc
 	referencedStructs := map[string]bool{}
-	hasApp := false
+	hasOnServerStart := false
+	hasAroundRequest := false
 
 	for _, f := range allFiles {
 		for _, decl := range f.Decls {
@@ -155,8 +157,12 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 			if !ok || fn.Recv != nil {
 				continue
 			}
-			if fn.Name.Name == "App" && isAppFunc(fn) {
-				hasApp = true
+			if fn.Name.Name == "OnServerStart" && isOnServerStartFunc(fn) {
+				hasOnServerStart = true
+				continue
+			}
+			if fn.Name.Name == "AroundRequest" && isAroundRequestFunc(fn) {
+				hasAroundRequest = true
 				continue
 			}
 			if !routeFuncNames[fn.Name.Name] {
@@ -172,7 +178,7 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 		}
 	}
 
-	if len(funcs) == 0 && !hasApp {
+	if len(funcs) == 0 && !hasOnServerStart && !hasAroundRequest {
 		return nil, nil
 	}
 
@@ -188,11 +194,12 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 	relDir, _ := filepath.Rel(rootDir, dir)
 
 	return &RouteFile{
-		Dir:     relDir,
-		Package: allFiles[0].Name.Name,
-		Funcs:   funcs,
-		Structs: structs,
-		HasApp:  hasApp,
+		Dir:              relDir,
+		Package:          allFiles[0].Name.Name,
+		Funcs:            funcs,
+		Structs:          structs,
+		HasOnServerStart: hasOnServerStart,
+		HasAroundRequest: hasAroundRequest,
 	}, nil
 }
 
@@ -237,9 +244,9 @@ func isContextParam(expr ast.Expr) bool {
 	return sel.Sel.Name == "Context"
 }
 
-// isAppFunc checks if a function declaration matches func App(*<pkg>.App).
+// isOnServerStartFunc checks if a function declaration matches func OnServerStart(*<pkg>.App).
 // It must have exactly one parameter of type *<pkg>.App and no return values.
-func isAppFunc(fn *ast.FuncDecl) bool {
+func isOnServerStartFunc(fn *ast.FuncDecl) bool {
 	// Must have no return values.
 	if fn.Type.Results != nil && len(fn.Type.Results.List) > 0 {
 		return false
@@ -248,11 +255,35 @@ func isAppFunc(fn *ast.FuncDecl) bool {
 	if fn.Type.Params == nil || len(fn.Type.Params.List) != 1 {
 		return false
 	}
-	return isAppParam(fn.Type.Params.List[0].Type)
+	return isStarSelector(fn.Type.Params.List[0].Type, "App")
 }
 
-// isAppParam checks if a type expression is *<pkg>.App.
-func isAppParam(expr ast.Expr) bool {
+// isAroundRequestFunc checks if a function declaration matches
+// func AroundRequest() []<pkg>.Middleware.
+// It must have no parameters and return exactly []<pkg>.Middleware.
+func isAroundRequestFunc(fn *ast.FuncDecl) bool {
+	// Must have no parameters.
+	if fn.Type.Params != nil && len(fn.Type.Params.List) > 0 {
+		return false
+	}
+	// Must have exactly one return value.
+	if fn.Type.Results == nil || len(fn.Type.Results.List) != 1 {
+		return false
+	}
+	// Return type must be []<pkg>.Middleware.
+	arr, ok := fn.Type.Results.List[0].Type.(*ast.ArrayType)
+	if !ok {
+		return false
+	}
+	sel, ok := arr.Elt.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	return sel.Sel.Name == "Middleware"
+}
+
+// isStarSelector checks if a type expression is *<pkg>.<name>.
+func isStarSelector(expr ast.Expr, name string) bool {
 	star, ok := expr.(*ast.StarExpr)
 	if !ok {
 		return false
@@ -261,7 +292,7 @@ func isAppParam(expr ast.Expr) bool {
 	if !ok {
 		return false
 	}
-	return sel.Sel.Name == "App"
+	return sel.Sel.Name == name
 }
 
 // resolveType returns the type name and whether it's a slice.

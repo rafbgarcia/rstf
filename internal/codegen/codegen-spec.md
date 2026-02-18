@@ -120,6 +120,8 @@ The generated server declares `package main` with `func main()`, imports the use
 **Rules:**
 
 - User's `main.go` uses the app's package name (not `package main`), making it importable. See `internal/conventions/conventions-spec.md`.
+- If `OnServerStart(*rstf.App)` is exported in the layout, the generated server calls it once at startup and wires `ctx.DB` from the app's database connection into every request context.
+- If `AroundRequest() []rstf.Middleware` is exported in the layout, the generated server iterates the returned slice and calls `rt.Use(mw)` for each middleware after router creation, before route registration. Middlewares execute in listed order.
 - Layout `app.SSR()` is called on every request, before route-specific handlers.
 - Each `SSR()` return struct is converted to `map[string]any` via JSON round-trip so keys match `json` tags.
 - `ServerData` in render requests is keyed by component path (e.g. `"routes/dashboard"`). See `renderer/renderer-spec.md`.

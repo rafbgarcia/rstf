@@ -33,6 +33,13 @@ func New() *Router {
 	return &Router{mux: mux}
 }
 
+// Use appends one or more middlewares to the router stack.
+func (r *Router) Use(middlewares ...func(http.Handler) http.Handler) {
+	for _, mw := range middlewares {
+		r.mux.Use(mw)
+	}
+}
+
 // Get registers a handler for GET requests at the given pattern.
 func (r *Router) Get(pattern string, handler http.HandlerFunc) {
 	r.mux.Get(pattern, handler)

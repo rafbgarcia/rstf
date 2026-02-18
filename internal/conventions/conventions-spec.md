@@ -123,3 +123,37 @@ The framework recognizes the exported function name `SSR` and maps it to `GET` r
 | `SSR` | GET | Calls function, renders React component via Bun sidecar, returns HTML |
 
 Additional HTTP method handlers (`GET` for JSON, `POST`, `PUT`, `DELETE`) are planned but not yet designed. They will be specified in a separate document when implemented.
+
+## Lifecycle functions
+
+The layout (`main.go`) can export two optional lifecycle functions detected by codegen. Both are convention-based — the framework detects them by name and signature.
+
+### `OnServerStart(app *rstf.App)`
+
+Called once at server startup. Configures app-level resources (database connections, etc.) that persist for the server's lifetime. Replaces the previous `App` convention.
+
+```go
+func OnServerStart(app *rstf.App) {
+    app.Database("postgres", os.Getenv("DATABASE_URL"))
+}
+```
+
+The generated server creates `rstf.NewApp()`, calls `OnServerStart`, and injects `ctx.DB = rstfApp.DB()` into every request context.
+
+### `AroundRequest() []rstf.Middleware`
+
+Returns an ordered slice of standard Go HTTP middlewares applied to all routes. Middlewares execute in listed order (first in list = outermost wrapper). Enables sessions, auth, CORS, logging, etc. using any Go middleware package.
+
+`rstf.Middleware` is a type alias for `func(http.Handler) http.Handler` — compatible with any existing Go middleware without casting.
+
+```go
+func AroundRequest() []rstf.Middleware {
+    return []rstf.Middleware{
+        corsMiddleware,
+        sessionMiddleware,
+        authMiddleware,
+    }
+}
+```
+
+A middleware can short-circuit the request (e.g. redirect to `/login`) by not calling `next.ServeHTTP`. This prevents SSR handlers from running for unauthorized requests.

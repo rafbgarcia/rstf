@@ -248,18 +248,19 @@ func writeMain(
 	aliasMap map[string]serverImport,
 	deps map[string][]string,
 ) {
-	hasApp := hasLayout && layout.HasApp
+	hasOnServerStart := hasLayout && layout.HasOnServerStart
+	hasAroundRequest := hasLayout && layout.HasAroundRequest
 
 	b.WriteString(`func main() {
 	port := flag.String("port", "3000", "HTTP server port")
 	flag.Parse()
 `)
 
-	if hasApp {
+	if hasOnServerStart {
 		imp := aliasMap["."]
 		fmt.Fprintf(b, `
 	rstfApp := rstf.NewApp()
-	%s.App(rstfApp)
+	%s.OnServerStart(rstfApp)
 	defer rstfApp.Close()
 `, imp.Alias)
 	}
@@ -282,7 +283,18 @@ func writeMain(
 	}()
 
 	rt := router.New()
+`)
 
+	if hasAroundRequest {
+		imp := aliasMap["."]
+		fmt.Fprintf(b, `
+	for _, mw := range %s.AroundRequest() {
+		rt.Use(mw)
+	}
+`, imp.Alias)
+	}
+
+	b.WriteString(`
 	rt.Handle("/.rstf/static/*", http.StripPrefix("/.rstf/static/", http.FileServer(http.Dir(".rstf/static"))))
 
 	var cssPath string
@@ -328,7 +340,7 @@ func writeMain(
 		ctx := rstf.NewContext(req)
 `, route.urlPattern)
 
-		if hasApp {
+		if hasOnServerStart {
 			b.WriteString("\t\tctx.DB = rstfApp.DB()\n")
 		}
 
