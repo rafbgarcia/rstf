@@ -63,11 +63,17 @@ func GenerateDTS(rf RouteFile) string {
 // componentPath is the key used in __RSTF_SERVER_DATA__ (e.g. "main",
 // "routes/dashboard", "shared/ui/user-avatar").
 func GenerateRuntimeModule(rf RouteFile, componentPath string) string {
-	if len(rf.Funcs) == 0 {
+	var fn *RouteFunc
+	for i := range rf.Funcs {
+		if rf.Funcs[i].Name == "SSR" {
+			fn = &rf.Funcs[i]
+			break
+		}
+	}
+	if fn == nil {
 		return ""
 	}
 
-	fn := rf.Funcs[0]
 	ns := Namespace(rf.Dir)
 
 	// Verify the return struct exists.

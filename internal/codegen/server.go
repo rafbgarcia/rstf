@@ -19,94 +19,102 @@ type serverImport struct {
 	HasContext bool   // whether SSR() takes *rstf.Context
 }
 
-// routeEntry pairs a route directory with its computed URL pattern.
+// routeEntry pairs a route directory with its computed URL pattern and handlers.
 type routeEntry struct {
-	dir        string // e.g. "routes/dashboard"
-	folderName string // e.g. "dashboard"
-	urlPattern string // e.g. "/dashboard"
+	dir           string
+	urlPattern    string
+	hasComponent  bool
+	hasSSR        bool
+	hasGET        bool
+	hasPOST       bool
+	hasPUT        bool
+	hasPATCH      bool
+	hasDELETE     bool
+	ssrHasContext bool
 }
 
 // GenerateServer produces the content of .rstf/server_gen.go — the Go entry
-// point that wires routes to handlers, calls SSR functions, and renders via
+// point that wires routes to handlers, calls route functions, and renders via
 // the Node sidecar.
-//
-// Parameters:
-//   - modulePath: the user's Go module path (from go.mod), e.g. "github.com/user/myapp"
-//   - files: all RouteFile results from ParseDir(projectRoot), with Dir relative
-//     to the project root (".", "routes/dashboard", "shared/ui/user-avatar")
-//   - deps: maps route dir → dep dirs from AnalyzeDeps. The layout dir "." is
-//     NOT expected in deps — GenerateServer always adds it.
 func GenerateServer(modulePath string, files []RouteFile, deps map[string][]string) (string, error) {
-	// Build dir → RouteFile lookup.
 	fileMap := map[string]RouteFile{}
 	for _, f := range files {
 		fileMap[f.Dir] = f
 	}
 
-	// Find the layout (root package).
 	layout, hasLayout := fileMap["."]
 
-	// Validate: main.go must not use "package main" — it needs to be importable
-	// by the generated server_gen.go which itself declares package main.
 	if hasLayout && layout.Package == "main" {
 		return "", fmt.Errorf(
 			"main.go: package main is reserved for rstf, please use a different package name (e.g. your app name)",
 		)
 	}
 
-	// Identify route dirs and compute URL patterns.
-	var routes []routeEntry
+	routeMap := map[string]routeEntry{}
 	for _, f := range files {
 		if !conventions.IsRouteDir(f.Dir) {
 			continue
 		}
 		folder := strings.TrimPrefix(f.Dir, "routes/")
-		routes = append(routes, routeEntry{
+		e := routeEntry{
 			dir:        f.Dir,
-			folderName: folder,
 			urlPattern: conventions.FolderToURLPattern(folder),
-		})
-	}
-
-	// Also add routes that appear in deps but don't have a .go file (TSX-only routes).
-	routeSet := map[string]bool{}
-	for _, r := range routes {
-		routeSet[r.dir] = true
-	}
-	for routeDir := range deps {
-		if !routeSet[routeDir] && conventions.IsRouteDir(routeDir) {
-			folder := strings.TrimPrefix(routeDir, "routes/")
-			routes = append(routes, routeEntry{
-				dir:        routeDir,
-				folderName: folder,
-				urlPattern: conventions.FolderToURLPattern(folder),
-			})
 		}
+		for _, fn := range f.Funcs {
+			switch fn.Name {
+			case "SSR":
+				e.hasSSR = true
+				e.ssrHasContext = fn.HasContext
+			case "GET":
+				e.hasGET = true
+			case "POST":
+				e.hasPOST = true
+			case "PUT":
+				e.hasPUT = true
+			case "PATCH":
+				e.hasPATCH = true
+			case "DELETE":
+				e.hasDELETE = true
+			}
+		}
+		routeMap[f.Dir] = e
 	}
 
-	// Sort routes by URL pattern for deterministic output.
+	for routeDir := range deps {
+		if !conventions.IsRouteDir(routeDir) {
+			continue
+		}
+		e := routeMap[routeDir]
+		if e.dir == "" {
+			folder := strings.TrimPrefix(routeDir, "routes/")
+			e = routeEntry{dir: routeDir, urlPattern: conventions.FolderToURLPattern(folder)}
+		}
+		e.hasComponent = true
+		routeMap[routeDir] = e
+	}
+
+	var routes []routeEntry
+	for _, e := range routeMap {
+		routes = append(routes, e)
+	}
 	sort.Slice(routes, func(i, j int) bool {
 		return routes[i].urlPattern < routes[j].urlPattern
 	})
 
-	// Collect all user-package imports needed across all routes.
 	imports := collectImports(modulePath, layout, hasLayout, routes, deps, fileMap)
 
-	// Build alias lookup: dir → serverImport.
 	aliasMap := map[string]serverImport{}
 	for _, imp := range imports {
 		aliasMap[imp.Dir] = imp
 	}
 
-	// Generate the Go source.
 	var b strings.Builder
-
 	writeHeader(&b)
 	writeImports(&b, imports)
+	writeAcceptHelpers(&b)
 	writeStructToMap(&b)
 	writeAssemblePage(&b)
 	writeMain(&b, routes, layout, hasLayout, aliasMap, deps)
-
 	return b.String(), nil
 }
 
@@ -120,8 +128,8 @@ func collectImports(
 	deps map[string][]string,
 	fileMap map[string]RouteFile,
 ) []serverImport {
-	seen := map[string]bool{}       // dir → already added
-	usedAliases := map[string]int{} // alias → count (for collision detection)
+	seen := map[string]bool{}
+	usedAliases := map[string]int{}
 	var imports []serverImport
 
 	addImport := func(dir string) {
@@ -132,7 +140,7 @@ func collectImports(
 
 		rf, ok := fileMap[dir]
 		if !ok {
-			return // no .go file for this dir
+			return
 		}
 
 		var importPath string
@@ -141,8 +149,6 @@ func collectImports(
 			importPath = modulePath
 			baseAlias = "app"
 		} else if strings.Contains(dir, "$") {
-			// $ is not valid in Go import paths. The codegen pipeline creates
-			// symlinks under .rstf/pkgs/ with $ stripped so Go can import them.
 			importPath = modulePath + "/.rstf/pkgs/" + strings.ReplaceAll(dir, "$", "")
 			baseAlias = rf.Package
 		} else {
@@ -150,7 +156,6 @@ func collectImports(
 			baseAlias = rf.Package
 		}
 
-		// Resolve alias collisions.
 		alias := baseAlias
 		if count, exists := usedAliases[baseAlias]; exists {
 			alias = fmt.Sprintf("%s%d", baseAlias, count+1)
@@ -158,8 +163,11 @@ func collectImports(
 		usedAliases[baseAlias]++
 
 		hasCtx := false
-		if len(rf.Funcs) > 0 {
-			hasCtx = rf.Funcs[0].HasContext
+		for _, fn := range rf.Funcs {
+			if fn.Name == "SSR" {
+				hasCtx = fn.HasContext
+				break
+			}
 		}
 
 		imports = append(imports, serverImport{
@@ -170,12 +178,10 @@ func collectImports(
 		})
 	}
 
-	// Layout first.
 	if hasLayout {
 		addImport(".")
 	}
 
-	// Route packages and their deps.
 	for _, r := range routes {
 		addImport(r.dir)
 		for _, depDir := range deps[r.dir] {
@@ -193,26 +199,83 @@ func writeHeader(b *strings.Builder) {
 
 func writeImports(b *strings.Builder, imports []serverImport) {
 	b.WriteString("import (\n")
-	// Standard library.
 	b.WriteString("\t\"encoding/json\"\n")
 	b.WriteString("\t\"flag\"\n")
 	b.WriteString("\t\"fmt\"\n")
+	b.WriteString("\t\"mime\"\n")
 	b.WriteString("\t\"net/http\"\n")
 	b.WriteString("\t\"os\"\n")
 	b.WriteString("\t\"os/signal\"\n")
+	b.WriteString("\t\"strconv\"\n")
 	b.WriteString("\t\"strings\"\n")
 	b.WriteString("\t\"syscall\"\n")
 	b.WriteString("\n")
-	// Framework.
 	fmt.Fprintf(b, "\trstf %q\n", frameworkModule)
 	fmt.Fprintf(b, "\t%q\n", frameworkModule+"/renderer")
 	fmt.Fprintf(b, "\t%q\n", frameworkModule+"/router")
 	b.WriteString("\n")
-	// User packages.
 	for _, imp := range imports {
 		fmt.Fprintf(b, "\t%s %q\n", imp.Alias, imp.ImportPath)
 	}
 	b.WriteString(")\n\n")
+}
+
+func writeAcceptHelpers(b *strings.Builder) {
+	b.WriteString(`func prefersHTML(accept string) bool {
+	accept = strings.TrimSpace(accept)
+	if accept == "" {
+		return true
+	}
+
+	bestQ := -1.0
+	bestIsHTML := false
+	bestOrder := 0
+	parts := strings.Split(accept, ",")
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		mediaType, params, err := mime.ParseMediaType(part)
+		if err != nil {
+			continue
+		}
+		q := 1.0
+		if qRaw, ok := params["q"]; ok {
+			if parsed, err := strconv.ParseFloat(qRaw, 64); err == nil {
+				q = parsed
+			}
+		}
+		if q <= 0 {
+			continue
+		}
+
+		mediaType = strings.ToLower(strings.TrimSpace(mediaType))
+		isHTML := mediaType == "text/html" || mediaType == "application/xhtml+xml" || mediaType == "*/*"
+
+		if q > bestQ || (q == bestQ && i >= bestOrder) {
+			bestQ = q
+			bestIsHTML = isHTML
+			bestOrder = i
+		}
+	}
+
+	if bestQ < 0 {
+		return true
+	}
+	return bestIsHTML
+}
+
+func allowHeader(methods []string) string {
+	return strings.Join(methods, ", ")
+}
+
+func methodNotAllowed(w http.ResponseWriter, methods []string) {
+	w.Header().Set("Allow", allowHeader(methods))
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+`)
+	b.WriteString("\n")
 }
 
 func writeStructToMap(b *strings.Builder) {
@@ -250,6 +313,15 @@ func writeMain(
 ) {
 	hasOnServerStart := hasLayout && layout.HasOnServerStart
 	hasAroundRequest := hasLayout && layout.HasAroundRequest
+	hasLayoutSSR := false
+	if hasLayout {
+		for _, fn := range layout.Funcs {
+			if fn.Name == "SSR" {
+				hasLayoutSSR = true
+				break
+			}
+		}
+	}
 
 	b.WriteString(`func main() {
 	port := flag.String("port", "3000", "HTTP server port")
@@ -273,7 +345,6 @@ func writeMain(
 	}
 	defer r.Stop()
 
-	// Stop the sidecar on interrupt/terminate signals.
 	go func() {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -304,71 +375,83 @@ func writeMain(
 `)
 
 	for _, route := range routes {
-		// Build ServerData entries.
-		type sdEntry struct {
-			key  string // e.g. "main", "routes/dashboard"
-			call string // e.g. "structToMap(app.SSR(ctx))"
+		allowedMethods := []string{"OPTIONS"}
+		if route.hasComponent || route.hasGET {
+			allowedMethods = append(allowedMethods, "GET", "HEAD")
 		}
-		var entries []sdEntry
-
-		// Layout always first.
-		if hasLayout && len(layout.Funcs) > 0 {
-			imp := aliasMap["."]
-			entries = append(entries, sdEntry{
-				key:  "main",
-				call: ssrCall(imp.Alias, imp.HasContext),
-			})
+		if route.hasPOST {
+			allowedMethods = append(allowedMethods, "POST")
 		}
-
-		// Route's own deps (which includes itself if it has a .go file).
-		for _, depDir := range deps[route.dir] {
-			if depDir == "." {
-				continue // layout already handled
-			}
-			imp, ok := aliasMap[depDir]
-			if !ok {
-				continue
-			}
-			entries = append(entries, sdEntry{
-				key:  depDir,
-				call: ssrCall(imp.Alias, imp.HasContext),
-			})
+		if route.hasPUT {
+			allowedMethods = append(allowedMethods, "PUT")
+		}
+		if route.hasPATCH {
+			allowedMethods = append(allowedMethods, "PATCH")
+		}
+		if route.hasDELETE {
+			allowedMethods = append(allowedMethods, "DELETE")
 		}
 
-		fmt.Fprintf(b, `
-	rt.Get(%q, func(w http.ResponseWriter, req *http.Request) {
-		ctx := rstf.NewContext(req)
-`, route.urlPattern)
-
-		if hasOnServerStart {
-			b.WriteString("\t\tctx.DB = rstfApp.DB()\n")
-		}
-
-		b.WriteString(`
-		sd := map[string]map[string]any{
-`)
-
-		for _, e := range entries {
-			fmt.Fprintf(b, "\t\t\t%q: %s,\n", e.key, e.call)
-		}
-
-		fmt.Fprintf(b, "\t\t}\n\n")
-		fmt.Fprintf(b, "\t\thtml, err := r.Render(renderer.RenderRequest{\n")
-		fmt.Fprintf(b, "\t\t\tComponent: %q,\n", route.dir)
-		fmt.Fprintf(b, "\t\t\tLayout:    \"main\",\n")
-
-		if len(entries) > 0 {
-			b.WriteString("\t\t\tServerData: sd,\n")
-		}
-
-		fmt.Fprintf(b, `		})
-		if err != nil {
-			http.Error(w, err.Error(), 500)
+		fmt.Fprintf(b, "\n\trt.Handle(%q, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {\n", route.urlPattern)
+		fmt.Fprintf(b, "\t\tallowed := []string{%s}\n", quotedList(allowedMethods))
+		b.WriteString(`		switch req.Method {
+		case http.MethodOptions:
+			w.Header().Set("Allow", allowHeader(allowed))
+			w.WriteHeader(http.StatusNoContent)
 			return
+		case http.MethodGet:
+			isHTML := prefersHTML(req.Header.Get("Accept"))
+			if isHTML {
+`)
+		if route.hasComponent {
+			writeHTMLRenderBlock(b, route, hasOnServerStart, hasLayoutSSR, aliasMap, deps)
+		} else {
+			b.WriteString("\t\t\t\tw.WriteHeader(http.StatusNotAcceptable)\n\t\t\t\treturn\n")
 		}
-		fmt.Fprint(w, assemblePage(html, sd, %q, cssPath))
-	})
-`, bundlePath(route.dir))
+		b.WriteString(`			}
+			`)
+		if route.hasGET {
+			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "GET")
+		} else {
+			b.WriteString("w.WriteHeader(http.StatusNotAcceptable)\n\t\t\treturn\n")
+		}
+		b.WriteString(`		case http.MethodHead:
+			isHTML := prefersHTML(req.Header.Get("Accept"))
+			if isHTML {
+`)
+		if route.hasComponent {
+			writeHTMLRenderBlockHead(b, route, hasOnServerStart, hasLayoutSSR, aliasMap, deps)
+		} else {
+			b.WriteString("\t\t\t\tw.WriteHeader(http.StatusNotAcceptable)\n\t\t\t\treturn\n")
+		}
+		b.WriteString(`			}
+			`)
+		if route.hasGET {
+			writeMethodCallBlockHead(b, route, hasOnServerStart, aliasMap, "GET")
+		} else {
+			b.WriteString("w.WriteHeader(http.StatusNotAcceptable)\n\t\t\treturn\n")
+		}
+		if route.hasPOST {
+			b.WriteString("\t\tcase http.MethodPost:\n")
+			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "POST")
+		}
+		if route.hasPUT {
+			b.WriteString("\t\tcase http.MethodPut:\n")
+			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "PUT")
+		}
+		if route.hasPATCH {
+			b.WriteString("\t\tcase http.MethodPatch:\n")
+			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "PATCH")
+		}
+		if route.hasDELETE {
+			b.WriteString("\t\tcase http.MethodDelete:\n")
+			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "DELETE")
+		}
+		b.WriteString(`		default:
+			methodNotAllowed(w, allowed)
+		}
+	}))
+`)
 	}
 
 	b.WriteString(`
@@ -377,12 +460,143 @@ func writeMain(
 `)
 }
 
-// ssrCall returns the Go expression for calling an SSR function.
+func writeHTMLRenderBlock(
+	b *strings.Builder,
+	route routeEntry,
+	hasOnServerStart bool,
+	hasLayoutSSR bool,
+	aliasMap map[string]serverImport,
+	deps map[string][]string,
+) {
+	b.WriteString("\t\t\t\tctx := rstf.NewContext(req)\n")
+	if hasOnServerStart {
+		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+	}
+
+	b.WriteString("\t\t\t\tsd := map[string]map[string]any{}\n")
+	if hasLayoutSSR {
+		imp := aliasMap["."]
+		fmt.Fprintf(b, "\t\t\t\tsd[\"main\"] = %s\n", ssrCall(imp.Alias, imp.HasContext))
+	}
+	for _, depDir := range deps[route.dir] {
+		if depDir == "." {
+			continue
+		}
+		imp, ok := aliasMap[depDir]
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(b, "\t\t\t\tsd[%q] = %s\n", depDir, ssrCall(imp.Alias, imp.HasContext))
+	}
+
+	fmt.Fprintf(b, "\t\t\t\thtml, err := r.Render(renderer.RenderRequest{Component: %q, Layout: \"main\", ServerData: sd})\n", route.dir)
+	b.WriteString("\t\t\t\tif err != nil {\n")
+	b.WriteString("\t\t\t\t\thttp.Error(w, err.Error(), 500)\n")
+	b.WriteString("\t\t\t\t\treturn\n")
+	b.WriteString("\t\t\t\t}\n")
+	fmt.Fprintf(b, "\t\t\t\tfmt.Fprint(w, assemblePage(html, sd, %q, cssPath))\n", bundlePath(route.dir))
+	b.WriteString("\t\t\t\treturn\n")
+}
+
+func writeHTMLRenderBlockHead(
+	b *strings.Builder,
+	route routeEntry,
+	hasOnServerStart bool,
+	hasLayoutSSR bool,
+	aliasMap map[string]serverImport,
+	deps map[string][]string,
+) {
+	b.WriteString("\t\t\t\tctx := rstf.NewContext(req)\n")
+	if hasOnServerStart {
+		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+	}
+
+	b.WriteString("\t\t\t\tsd := map[string]map[string]any{}\n")
+	if hasLayoutSSR {
+		imp := aliasMap["."]
+		fmt.Fprintf(b, "\t\t\t\tsd[\"main\"] = %s\n", ssrCall(imp.Alias, imp.HasContext))
+	}
+	for _, depDir := range deps[route.dir] {
+		if depDir == "." {
+			continue
+		}
+		imp, ok := aliasMap[depDir]
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(b, "\t\t\t\tsd[%q] = %s\n", depDir, ssrCall(imp.Alias, imp.HasContext))
+	}
+
+	fmt.Fprintf(b, "\t\t\t\thtml, err := r.Render(renderer.RenderRequest{Component: %q, Layout: \"main\", ServerData: sd})\n", route.dir)
+	b.WriteString("\t\t\t\tif err != nil {\n")
+	b.WriteString("\t\t\t\t\thttp.Error(w, err.Error(), 500)\n")
+	b.WriteString("\t\t\t\t\treturn\n")
+	b.WriteString("\t\t\t\t}\n")
+	fmt.Fprintf(b, "\t\t\t\tpage := assemblePage(html, sd, %q, cssPath)\n", bundlePath(route.dir))
+	b.WriteString("\t\t\t\tw.Header().Set(\"Content-Type\", \"text/html; charset=utf-8\")\n")
+	b.WriteString("\t\t\t\tw.Header().Set(\"Content-Length\", strconv.Itoa(len(page)))\n")
+	b.WriteString("\t\t\t\tw.WriteHeader(http.StatusOK)\n")
+	b.WriteString("\t\t\t\treturn\n")
+}
+
+func writeMethodCallBlock(b *strings.Builder, route routeEntry, hasOnServerStart bool, aliasMap map[string]serverImport, methodName string) {
+	alias := aliasMap[route.dir].Alias
+	fmt.Fprintf(b, "\t\t\t\ttracker := rstf.NewResponseTracker(w)\n")
+	fmt.Fprintf(b, "\t\t\t\tctx := rstf.NewContext(req)\n")
+	b.WriteString("\t\t\t\tctx.Writer = tracker\n")
+	if hasOnServerStart {
+		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+	}
+	fmt.Fprintf(b, "\t\t\t\terr := %s.%s(ctx)\n", alias, methodName)
+	b.WriteString("\t\t\t\tif err != nil {\n")
+	b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")
+	b.WriteString("\t\t\t\t\t\trstf.WriteErrorEnvelope(tracker, err)\n")
+	b.WriteString("\t\t\t\t\t}\n")
+	b.WriteString("\t\t\t\t\treturn\n")
+	b.WriteString("\t\t\t\t}\n")
+	b.WriteString("\t\t\t\tif !tracker.Written() {\n")
+	b.WriteString("\t\t\t\t\ttracker.WriteHeader(http.StatusNoContent)\n")
+	b.WriteString("\t\t\t\t}\n")
+	b.WriteString("\t\t\t\treturn\n")
+}
+
+func writeMethodCallBlockHead(b *strings.Builder, route routeEntry, hasOnServerStart bool, aliasMap map[string]serverImport, methodName string) {
+	alias := aliasMap[route.dir].Alias
+	fmt.Fprintf(b, "\t\t\t\ttracker := rstf.NewResponseTracker(w)\n")
+	fmt.Fprintf(b, "\t\t\t\tctx := rstf.NewContext(req)\n")
+	b.WriteString("\t\t\t\tctx.Writer = rstf.NewHeadWriter(tracker)\n")
+	if hasOnServerStart {
+		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+	}
+	fmt.Fprintf(b, "\t\t\t\terr := %s.%s(ctx)\n", alias, methodName)
+	b.WriteString("\t\t\t\tif err != nil {\n")
+	b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")
+	b.WriteString("\t\t\t\t\t\trstf.WriteErrorEnvelope(tracker, err)\n")
+	b.WriteString("\t\t\t\t\t}\n")
+	b.WriteString("\t\t\t\t\treturn\n")
+	b.WriteString("\t\t\t\t}\n")
+	b.WriteString("\t\t\t\tif !tracker.Written() {\n")
+	b.WriteString("\t\t\t\t\ttracker.WriteHeader(http.StatusNoContent)\n")
+	b.WriteString("\t\t\t\t}\n")
+	b.WriteString("\t\t\t\treturn\n")
+}
+
 func ssrCall(alias string, hasContext bool) string {
 	if hasContext {
 		return fmt.Sprintf("structToMap(%s.SSR(ctx))", alias)
 	}
 	return fmt.Sprintf("structToMap(%s.SSR())", alias)
+}
+
+func quotedList(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	quoted := make([]string, 0, len(items))
+	for _, item := range items {
+		quoted = append(quoted, fmt.Sprintf("%q", item))
+	}
+	return strings.Join(quoted, ", ")
 }
 
 // ParseModulePath extracts the module path from go.mod content.

@@ -9,6 +9,7 @@ import (
 // It provides access to logging, the database connection pool, and other framework utilities.
 type Context struct {
 	Log     *Logger
+	Writer  http.ResponseWriter
 	Request *http.Request
 	DB      *sql.DB
 }

@@ -594,6 +594,14 @@ func ensureDeps(projectRoot, modulePath string) error {
 		return nil
 	}
 
+	// Local replace of the framework module means deps are resolved from disk,
+	// so network resolution is unnecessary (and can fail in offline CI/tests).
+	if goModContent, err := os.ReadFile(filepath.Join(projectRoot, "go.mod")); err == nil {
+		if strings.Contains(string(goModContent), "replace "+frameworkModule+" =>") {
+			return nil
+		}
+	}
+
 	// Framework module already in go.sum — deps are resolved.
 	if sumContent, err := os.ReadFile(filepath.Join(projectRoot, "go.sum")); err == nil {
 		if strings.Contains(string(sumContent), frameworkModule+" ") {

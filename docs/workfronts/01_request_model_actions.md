@@ -52,3 +52,16 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
   }
 }
 ```
+
+## Implementation Status (Current)
+- Parser now recognizes route handlers: `SSR`, `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
+- Generated server now dispatches by HTTP method per route:
+  - `GET`: Accept negotiation (`text/html` preference -> SSR page render, non-HTML -> `GET` handler, missing selected handler -> `406`).
+  - `POST`/`PUT`/`PATCH`/`DELETE`: call route action handlers.
+  - `HEAD`: framework-provided from `GET` behavior (same status/headers, no body).
+  - `OPTIONS`: framework-generated `Allow` metadata per route.
+- `rstf.Context` now includes request/response helpers:
+  - `BindJSON` (with default 1 MiB body limit),
+  - `JSON`, `Text`, `Redirect`, `NoContent`.
+- Standard error envelope writer is implemented for action/API errors via `WriteErrorEnvelope`.
+- Integration test scenarios under `tests/integration/test_project/routes` now implement concrete handlers (no comment-only stubs).

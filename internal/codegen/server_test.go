@@ -123,14 +123,14 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`signal.Notify(c, os.Interrupt, syscall.SIGTERM)`,
 		`rt := router.New()`,
 		`rt.Handle("/.rstf/static/*"`,
-		`rt.Get("/dashboard"`,
+		`rt.Handle("/dashboard"`,
 		"ctx := rstf.NewContext(req)",
-		`"main": structToMap(app.SSR(ctx))`,
-		`"routes/dashboard": structToMap(dashboard.SSR(ctx))`,
-		"sd := map[string]map[string]any{",
-		"ServerData: sd,",
+		`sd["main"] = structToMap(app.SSR(ctx))`,
+		`sd["routes/dashboard"] = structToMap(dashboard.SSR(ctx))`,
+		"allowed := []string{\"OPTIONS\", \"GET\", \"HEAD\"}",
+		`w.WriteHeader(http.StatusNotAcceptable)`,
 		`Component: "routes/dashboard"`,
-		`Layout:    "main"`,
+		`Layout: "main"`,
 		`http.Error(w, err.Error(), 500)`,
 		`assemblePage(html, sd, "/.rstf/static/dashboard/bundle.js", cssPath)`,
 		`os.Stat(".rstf/static/main.css")`,
@@ -186,9 +186,9 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 
 	// Verify all three handlers exist.
 	expectations := []string{
-		`rt.Get("/"`,
-		`rt.Get("/dashboard"`,
-		`rt.Get("/users/{id}/edit"`,
+		`rt.Handle("/",`,
+		`rt.Handle("/dashboard",`,
+		`rt.Handle("/users/{id}/edit",`,
 		// Dynamic route should use .rstf/pkgs/ symlink path ($ stripped).
 		`useredit "github.com/user/myapp/.rstf/pkgs/routes/users.id.edit"`,
 	}
@@ -204,9 +204,9 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 	}
 
 	// Verify routes are sorted: / comes before /dashboard comes before /users/{id}/edit.
-	idxRoot := strings.Index(got, `rt.Get("/"`)
-	idxDash := strings.Index(got, `rt.Get("/dashboard"`)
-	idxUser := strings.Index(got, `rt.Get("/users/{id}/edit"`)
+	idxRoot := strings.Index(got, `rt.Handle("/",`)
+	idxDash := strings.Index(got, `rt.Handle("/dashboard",`)
+	idxUser := strings.Index(got, `rt.Handle("/users/{id}/edit",`)
 	if idxRoot >= idxDash || idxDash >= idxUser {
 		t.Errorf("routes not sorted by URL pattern: / at %d, /dashboard at %d, /users/{id}/edit at %d", idxRoot, idxDash, idxUser)
 	}
@@ -256,7 +256,7 @@ func TestGenerateServer_SharedDeps(t *testing.T) {
 
 	expectations := []string{
 		`useravatar "github.com/user/myapp/shared/ui/user-avatar"`,
-		`"shared/ui/user-avatar": structToMap(useravatar.SSR(ctx))`,
+		`sd["shared/ui/user-avatar"] = structToMap(useravatar.SSR(ctx))`,
 	}
 	for _, exp := range expectations {
 		if !strings.Contains(got, exp) {
@@ -286,17 +286,17 @@ func TestGenerateServer_RouteWithoutGoFile(t *testing.T) {
 	}
 
 	// Should still have a handler for /about.
-	if !strings.Contains(got, `rt.Get("/about"`) {
+	if !strings.Contains(got, `rt.Handle("/about",`) {
 		t.Errorf("output missing handler for /about\n\nFull output:\n%s", got)
 	}
 
 	// Should have layout SSR but NOT a route SSR call.
-	if !strings.Contains(got, `"main": structToMap(app.SSR(ctx))`) {
+	if !strings.Contains(got, `sd["main"] = structToMap(app.SSR(ctx))`) {
 		t.Errorf("output missing layout SSR call\n\nFull output:\n%s", got)
 	}
 
 	// Should not contain "routes/about" as a ServerData key (it appears in Component, which is fine).
-	if strings.Contains(got, `"routes/about": structToMap`) {
+	if strings.Contains(got, `sd["routes/about"] = structToMap`) {
 		t.Errorf("output should not contain routes/about ServerData entry\n\nFull output:\n%s", got)
 	}
 }
@@ -394,7 +394,7 @@ func TestGenerateServer_NoLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(got, `rt.Get("/dashboard"`) {
+	if !strings.Contains(got, `rt.Handle("/dashboard",`) {
 		t.Errorf("output missing handler\n\nFull output:\n%s", got)
 	}
 	// Should NOT have layout import or SSR call.
@@ -609,7 +609,7 @@ func TestGenerateServer_WithBothConventions(t *testing.T) {
 	// AroundRequest loop must appear after router creation but before route handlers.
 	rtNewIdx := strings.Index(got, "rt := router.New()")
 	aroundIdx := strings.Index(got, "app.AroundRequest()")
-	routeIdx := strings.Index(got, `rt.Get("/dashboard"`)
+	routeIdx := strings.Index(got, `rt.Handle("/dashboard",`)
 	if aroundIdx < rtNewIdx {
 		t.Errorf("AroundRequest should appear after router creation")
 	}

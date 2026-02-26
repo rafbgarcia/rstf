@@ -2,23 +2,6 @@ package dashboard
 
 import rstf "github.com/rafbgarcia/rstf"
 
-// Final API shape (v1):
-//
-//	func SSR(ctx *rstf.Context) SSRData {
-//		return SSRData{Message: "dashboard html"}
-//	}
-//
-//	func GET(ctx *rstf.Context) error {
-//		return ctx.JSON(200, APIResponse{
-//			Source: "get",
-//			Route:  "/get-vs-ssr",
-//		})
-//	}
-//
-// Runtime dispatch contract:
-// - GET + Accept preferring text/html -> SSR
-// - GET + non-HTML Accept -> GET
-
 type Post struct {
 	Title     string `json:"title"`
 	Published bool   `json:"published"`
@@ -45,6 +28,8 @@ func SSR(ctx *rstf.Context) ServerData {
 }
 
 func GET(ctx *rstf.Context) error {
-	_ = ctx
-	return nil
+	return ctx.JSON(200, APIResponse{
+		Source: "get",
+		Route:  "/get-vs-ssr",
+	})
 }

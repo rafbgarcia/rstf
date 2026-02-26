@@ -22,9 +22,9 @@ import (
 
 // RouteFunc represents a parsed route handler function (e.g. SSR).
 type RouteFunc struct {
-	Name       string // Function name: "SSR"
-	ReturnType string // Name of the return struct (e.g. "ServerData")
-	HasContext  bool   // Whether the function accepts a *rstf.Context parameter
+	Name       string // Function name: "SSR", "GET", "POST", etc.
+	ReturnType string // Name of the return struct (SSR only, e.g. "ServerData")
+	HasContext bool   // Whether the function accepts a *rstf.Context parameter
 }
 
 // StructDef represents a parsed Go struct and its fields.
@@ -52,7 +52,12 @@ type RouteFile struct {
 
 // routeFuncNames are the exported function names the framework recognizes.
 var routeFuncNames = map[string]bool{
-	"SSR": true,
+	"SSR":    true,
+	"GET":    true,
+	"POST":   true,
+	"PUT":    true,
+	"PATCH":  true,
+	"DELETE": true,
 }
 
 // ParseDir walks rootDir and parses all Go route files.
@@ -203,19 +208,26 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 	}, nil
 }
 
-// parseRouteFunc extracts the return type from a route function.
-// SSR must return a single struct type. Returns nil if the function doesn't match.
-// Detects if the first input parameter is a *rstf.Context (regardless of import alias).
+// parseRouteFunc extracts metadata from recognized route functions.
+// - SSR must return a single named struct type.
+// - GET/POST/PUT/PATCH/DELETE must be func METHOD(ctx *rstf.Context) error.
 func parseRouteFunc(fn *ast.FuncDecl) (*RouteFunc, []string) {
+	if fn.Name.Name == "SSR" {
+		return parseSSRFunc(fn)
+	}
+	return parseActionFunc(fn), nil
+}
+
+func parseSSRFunc(fn *ast.FuncDecl) (*RouteFunc, []string) {
 	results := fn.Type.Results
 	if results == nil || len(results.List) != 1 {
-		return nil, nil // Must have exactly one return value
+		return nil, nil
 	}
 
 	field := results.List[0]
 	typeName, isSlice := resolveType(field.Type)
 	if typeName == "" || isSlice || isPrimitiveGoType(typeName) {
-		return nil, nil // Must be a named struct (not primitive, not slice)
+		return nil, nil
 	}
 
 	hasContext := false
@@ -226,8 +238,32 @@ func parseRouteFunc(fn *ast.FuncDecl) (*RouteFunc, []string) {
 	return &RouteFunc{
 		Name:       fn.Name.Name,
 		ReturnType: typeName,
-		HasContext:  hasContext,
+		HasContext: hasContext,
 	}, []string{typeName}
+}
+
+func parseActionFunc(fn *ast.FuncDecl) *RouteFunc {
+	// Must have exactly one *Context parameter.
+	if fn.Type.Params == nil || len(fn.Type.Params.List) != 1 {
+		return nil
+	}
+	if !isContextParam(fn.Type.Params.List[0].Type) {
+		return nil
+	}
+
+	// Must return exactly error.
+	if fn.Type.Results == nil || len(fn.Type.Results.List) != 1 {
+		return nil
+	}
+	ret, ok := fn.Type.Results.List[0].Type.(*ast.Ident)
+	if !ok || ret.Name != "error" {
+		return nil
+	}
+
+	return &RouteFunc{
+		Name:       fn.Name.Name,
+		HasContext: true,
+	}
 }
 
 // isContextParam checks if a type expression is *<pkg>.Context.

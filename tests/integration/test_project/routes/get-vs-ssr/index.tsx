@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { serverData } from "@rstf/routes/dashboard";
+import { serverData } from "@rstf/routes/get-vs-ssr";
 
 export function View() {
   const { message, posts } = serverData();

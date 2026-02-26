@@ -12,7 +12,7 @@ export function View({ children }: { children: ReactNode }) {
         <header>
           <h1>{appName}</h1>
           <nav>
-            <a href="/dashboard">Dashboard</a>
+            <a href="/get-vs-ssr">Dashboard</a>
           </nav>
         </header>
         <main>{children}</main>

@@ -27,15 +27,15 @@ func TestEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(func() { r.Stop() })
 
-	// Step 3: Render the dashboard route (same request that server_gen.go would make).
+	// Step 3: Render the route (same request that server_gen.go would make).
 	html, err := r.Render(renderer.RenderRequest{
-		Component: "routes/dashboard",
+		Component: "routes/get-vs-ssr",
 		Layout:    "main",
 		ServerData: map[string]map[string]any{
 			"main": {
 				"appName": "Basic Example",
 			},
-			"routes/dashboard": {
+			"routes/get-vs-ssr": {
 				"message": "Welcome to the dashboard!",
 				"posts": []map[string]any{
 					{"title": "First Post", "published": true},
@@ -53,7 +53,7 @@ func TestEndToEnd(t *testing.T) {
 	// so the expected string is clean and not coupled to React internals.
 	got := strings.ReplaceAll(html, "<!-- -->", "")
 
-	want := `<html><head><title>Basic Example</title><title>Dashboard - Welcome to the dashboard!</title></head><body><header><h1>Basic Example</h1><nav><a href="/dashboard">Dashboard</a></nav></header><main><div><h2 class="text-blue-500">Welcome to the dashboard!</h2><button data-testid="counter">Count: 0</button><ul><li>First Post (published)</li><li>Draft Post (draft)</li></ul></div></main></body></html>`
+	want := `<html><head><title>Basic Example</title><title>Dashboard - Welcome to the dashboard!</title></head><body><header><h1>Basic Example</h1><nav><a href="/get-vs-ssr">Dashboard</a></nav></header><main><div><h2 class="text-blue-500">Welcome to the dashboard!</h2><button data-testid="counter">Count: 0</button><ul><li>First Post (published)</li><li>Draft Post (draft)</li></ul></div></main></body></html>`
 
 	if got != want {
 		t.Errorf("HTML mismatch.\n\nGot:\n%s\n\nWant:\n%s", got, want)
