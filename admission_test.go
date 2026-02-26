@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestAdmissionMiddleware_DropsWhenQueueFull(t *testing.T) {
@@ -54,21 +56,15 @@ func TestAdmissionMiddleware_DropsWhenQueueFull(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
-	}
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	var envelope map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
-		t.Fatalf("decode envelope: %v", err)
-	}
-	errBody := envelope["error"].(map[string]any)
-	if got := errBody["code"]; got != string(ErrorCodeOverloaded) {
-		t.Fatalf("error.code = %v, want %q", got, ErrorCodeOverloaded)
-	}
-	details := errBody["details"].(map[string]any)
-	if got := details["reason"]; got != "queue_full" {
-		t.Fatalf("details.reason = %v, want queue_full", got)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	errBody, ok := envelope["error"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, string(ErrorCodeOverloaded), errBody["code"])
+	details, ok := errBody["details"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "queue_full", details["reason"])
 
 	close(release)
 	wg.Wait()
@@ -108,18 +104,14 @@ func TestAdmissionMiddleware_QueueTimeout(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
-	}
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	var envelope map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
-		t.Fatalf("decode envelope: %v", err)
-	}
-	errBody := envelope["error"].(map[string]any)
-	details := errBody["details"].(map[string]any)
-	if got := details["reason"]; got != "queue_timeout" {
-		t.Fatalf("details.reason = %v, want queue_timeout", got)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	errBody, ok := envelope["error"].(map[string]any)
+	require.True(t, ok)
+	details, ok := errBody["details"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "queue_timeout", details["reason"])
 
 	close(release)
 	wg.Wait()

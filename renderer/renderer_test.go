@@ -3,8 +3,10 @@ package renderer
 import (
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testdataDir() string {
@@ -15,24 +17,16 @@ func testdataDir() string {
 func startRenderer(t *testing.T) *Renderer {
 	t.Helper()
 	r := New()
-	if err := r.Start(testdataDir()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
+	require.NoError(t, r.Start(testdataDir()))
 	t.Cleanup(func() { r.Stop() })
 	return r
 }
 
 func TestStartStop(t *testing.T) {
 	r := New()
-	if err := r.Start(testdataDir()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	if r.port == 0 {
-		t.Fatal("expected non-zero port")
-	}
-	if err := r.Stop(); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
+	require.NoError(t, r.Start(testdataDir()))
+	require.NotZero(t, r.port)
+	require.NoError(t, r.Stop())
 }
 
 func TestRenderWithServerData(t *testing.T) {
@@ -51,17 +45,13 @@ func TestRenderWithServerData(t *testing.T) {
 			},
 		},
 	})
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
+	require.NoError(t, err)
 
 	// React 19 may insert <!-- --> comment nodes between text and interpolated values.
-	if !strings.Contains(html, "Hello") || !strings.Contains(html, "World") {
-		t.Errorf("expected HTML to contain 'Hello' and 'World', got: %s", html)
-	}
-	if !strings.Contains(html, "Count:") || !strings.Contains(html, "42") {
-		t.Errorf("expected HTML to contain 'Count:' and '42', got: %s", html)
-	}
+	assert.Contains(t, html, "Hello")
+	assert.Contains(t, html, "World")
+	assert.Contains(t, html, "Count:")
+	assert.Contains(t, html, "42")
 }
 
 func TestRenderWithLayout(t *testing.T) {
@@ -80,23 +70,14 @@ func TestRenderWithLayout(t *testing.T) {
 			},
 		},
 	})
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
+	require.NoError(t, err)
 
-	if !strings.Contains(html, "My App") {
-		t.Errorf("expected HTML to contain layout title 'My App', got: %s", html)
-	}
-	if !strings.Contains(html, "<html") {
-		t.Errorf("expected HTML to contain <html from layout, got: %s", html)
-	}
-	if !strings.Contains(html, "<main") {
-		t.Errorf("expected HTML to contain <main from layout, got: %s", html)
-	}
+	assert.Contains(t, html, "My App")
+	assert.Contains(t, html, "<html")
+	assert.Contains(t, html, "<main")
 	// Route content should be nested inside layout
-	if !strings.Contains(html, "Hello") || !strings.Contains(html, "World") {
-		t.Errorf("expected HTML to contain route content, got: %s", html)
-	}
+	assert.Contains(t, html, "Hello")
+	assert.Contains(t, html, "World")
 }
 
 func TestRenderMissingComponent(t *testing.T) {
@@ -109,12 +90,8 @@ func TestRenderMissingComponent(t *testing.T) {
 			"layout/layout": {"title": "Test"},
 		},
 	})
-	if err == nil {
-		t.Fatal("expected error for missing component")
-	}
-	if !strings.Contains(err.Error(), "Component not found") {
-		t.Errorf("expected 'Component not found' error, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Component not found")
 }
 
 func TestRenderNoViewExport(t *testing.T) {
@@ -127,12 +104,8 @@ func TestRenderNoViewExport(t *testing.T) {
 			"layout/layout": {"title": "Test"},
 		},
 	})
-	if err == nil {
-		t.Fatal("expected error for component without View export")
-	}
-	if !strings.Contains(err.Error(), "does not export View") {
-		t.Errorf("expected 'does not export View' error, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not export View")
 }
 
 func TestRenderNoServerData(t *testing.T) {
@@ -142,18 +115,12 @@ func TestRenderNoServerData(t *testing.T) {
 		Component: "hello/hello",
 		Layout:    "layout/layout",
 	})
-	if err != nil {
-		t.Fatalf("Render with no server data: %v", err)
-	}
+	require.NoError(t, err)
 	// Should render without error; server data values will be defaults (empty strings, 0)
-	if !strings.Contains(html, "Hello") {
-		t.Errorf("expected HTML to contain 'Hello', got: %s", html)
-	}
+	assert.Contains(t, html, "Hello")
 }
 
 func TestStopWithoutStart(t *testing.T) {
 	r := New()
-	if err := r.Stop(); err != nil {
-		t.Fatalf("Stop without Start should not error, got: %v", err)
-	}
+	require.NoError(t, r.Stop())
 }

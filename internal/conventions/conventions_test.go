@@ -1,6 +1,10 @@
 package conventions
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestFolderToURLPattern(t *testing.T) {
 	tests := []struct {
@@ -18,9 +22,7 @@ func TestFolderToURLPattern(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := FolderToURLPattern(tt.folder)
-		if got != tt.want {
-			t.Errorf("FolderToURLPattern(%q) = %q, want %q", tt.folder, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got, "FolderToURLPattern(%q)", tt.folder)
 	}
 }
 
@@ -39,8 +41,6 @@ func TestIsRouteDir(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := IsRouteDir(tt.path)
-		if got != tt.want {
-			t.Errorf("IsRouteDir(%q) = %v, want %v", tt.path, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got, "IsRouteDir(%q)", tt.path)
 	}
 }

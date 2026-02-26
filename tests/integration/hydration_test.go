@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -16,6 +15,8 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/rafbgarcia/rstf/internal/codegen"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHydration(t *testing.T) {
@@ -23,15 +24,11 @@ func TestHydration(t *testing.T) {
 
 	// Step 1: Run codegen.
 	result, err := codegen.Generate(root)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
 
 	// Step 2: Bundle client JS for each entry.
-	if err := bundler.BundleEntries(root, result.Entries); err != nil {
-		t.Fatalf("bundling: %v", err)
-	}
+	require.NoError(t, bundler.BundleEntries(root, result.Entries))
 
 	// Step 3: Pick a free port.
 	port := freePort(t)
@@ -40,7 +37,7 @@ func TestHydration(t *testing.T) {
 	build := exec.Command("go", "build", "-o", filepath.Join(root, ".rstf", "server"), "./.rstf/server_gen.go")
 	build.Dir = root
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("compiling server: %v\n%s", err, out)
+		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
 	}
 
 	// Step 5: Start the compiled server. The generated server handles SIGINT
@@ -48,9 +45,7 @@ func TestHydration(t *testing.T) {
 	server := exec.Command(filepath.Join(root, ".rstf", "server"), "--port", port)
 	server.Dir = root
 	server.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := server.Start(); err != nil {
-		t.Fatalf("starting server: %v", err)
-	}
+	require.NoError(t, server.Start())
 	t.Cleanup(func() {
 		stopProcessGroup(t, server, 1*time.Second)
 	})
@@ -77,9 +72,7 @@ func TestHydration(t *testing.T) {
 		"First Post",
 		"Count: 0",
 	} {
-		if !strings.Contains(body, expected) {
-			t.Errorf("page missing SSR content %q\n\nbody text:\n%s", expected, body)
-		}
+		assert.Containsf(t, body, expected, "page missing SSR content %q\n\nbody text:\n%s", expected, body)
 	}
 
 	// Step 9: Click the counter button and verify hydration.
@@ -88,9 +81,7 @@ func TestHydration(t *testing.T) {
 	page.MustWaitStable()
 
 	btnText := btn.MustText()
-	if btnText != "Count: 1" {
-		t.Errorf("after click, expected button text %q, got %q", "Count: 1", btnText)
-	}
+	assert.Equal(t, "Count: 1", btnText)
 }
 
 // TestCSS verifies the full CSS pipeline: PostCSS/Tailwind processing, static
@@ -100,15 +91,11 @@ func TestCSS(t *testing.T) {
 
 	// Step 1: Run codegen.
 	result, err := codegen.Generate(root)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
 
 	// Step 2: Bundle client JS.
-	if err := bundler.BundleEntries(root, result.Entries); err != nil {
-		t.Fatalf("bundling: %v", err)
-	}
+	require.NoError(t, bundler.BundleEntries(root, result.Entries))
 
 	// Step 3: Build CSS via PostCSS (same approach as dev.go's buildCSSWithPostCSS).
 	outFile := filepath.Join(".rstf", "static", "main.css")
@@ -137,47 +124,35 @@ mkdirSync(resolve(".rstf/static"), { recursive: true });
 writeFileSync(resolve("` + outFile + `"), result.css);
 `
 	scriptPath := filepath.Join(root, ".rstf", "build-css.mjs")
-	if err := os.WriteFile(scriptPath, []byte(script), 0644); err != nil {
-		t.Fatalf("writing build-css.mjs: %v", err)
-	}
+	require.NoError(t, os.WriteFile(scriptPath, []byte(script), 0644))
 
 	cmd := exec.Command("node", scriptPath)
 	cmd.Dir = root
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("PostCSS build: %v", err)
-	}
+	require.NoError(t, cmd.Run())
 
 	// Step 4: Verify the built CSS file exists and contains expected output.
 	cssOutput, err := os.ReadFile(filepath.Join(root, ".rstf", "static", "main.css"))
-	if err != nil {
-		t.Fatalf("reading built CSS: %v", err)
-	}
+	require.NoError(t, err)
 	cssStr := string(cssOutput)
 
 	// Tailwind should produce the text-blue-500 utility (used in dashboard TSX).
-	if !strings.Contains(cssStr, "text-blue-500") {
-		t.Errorf("built CSS missing Tailwind utility 'text-blue-500'\n\nCSS output (first 500 chars):\n%s", cssStr[:min(500, len(cssStr))])
-	}
+	assert.Containsf(t, cssStr, "text-blue-500", "built CSS missing Tailwind utility 'text-blue-500'\n\nCSS output (first 500 chars):\n%s", cssStr[:min(500, len(cssStr))])
 	// Custom rule from main.css should survive PostCSS processing.
-	if !strings.Contains(cssStr, ".custom-red") {
-		t.Errorf("built CSS missing custom rule '.custom-red'\n\nCSS output (first 500 chars):\n%s", cssStr[:min(500, len(cssStr))])
-	}
+	assert.Containsf(t, cssStr, ".custom-red", "built CSS missing custom rule '.custom-red'\n\nCSS output (first 500 chars):\n%s", cssStr[:min(500, len(cssStr))])
 
 	// Step 5: Build and start the generated server.
 	port := freePort(t)
 	build := exec.Command("go", "build", "-o", filepath.Join(root, ".rstf", "server"), "./.rstf/server_gen.go")
 	build.Dir = root
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("compiling server: %v\n%s", err, out)
+		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
 	}
 
 	server := exec.Command(filepath.Join(root, ".rstf", "server"), "--port", port)
 	server.Dir = root
 	server.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := server.Start(); err != nil {
-		t.Fatalf("starting server: %v", err)
-	}
+	require.NoError(t, server.Start())
 	t.Cleanup(func() {
 		stopProcessGroup(t, server, 1*time.Second)
 	})
@@ -187,26 +162,19 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 
 	// Step 6: Verify the HTML response contains the CSS link tag.
 	resp, err := http.Get(baseURL + "/get-vs-ssr")
-	if err != nil {
-		t.Fatalf("GET /get-vs-ssr: %v", err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
-	htmlBytes, _ := io.ReadAll(resp.Body)
+	htmlBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	htmlStr := string(htmlBytes)
 
-	if !strings.Contains(htmlStr, `<link rel="stylesheet" href="/.rstf/static/main.css">`) {
-		t.Errorf("HTML missing CSS link tag\n\nHTML:\n%s", htmlStr)
-	}
+	assert.Contains(t, htmlStr, `<link rel="stylesheet" href="/.rstf/static/main.css">`)
 
 	// Step 7: Verify the CSS file is served by the static handler.
 	cssResp, err := http.Get(baseURL + "/.rstf/static/main.css")
-	if err != nil {
-		t.Fatalf("GET /.rstf/static/main.css: %v", err)
-	}
+	require.NoError(t, err)
 	defer cssResp.Body.Close()
-	if cssResp.StatusCode != 200 {
-		t.Fatalf("CSS static file returned status %d", cssResp.StatusCode)
-	}
+	require.Equal(t, 200, cssResp.StatusCode)
 
 	// Step 8: Launch headless browser and verify computed styles.
 	u := launcher.New().Headless(true).MustLaunch()
@@ -225,7 +193,6 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 
 	// Tailwind v4 text-blue-500 produces oklch, which browsers compute to rgb.
 	// Accept any non-black, non-inherited color as proof the stylesheet loaded.
-	if color == "" || color == "rgb(0, 0, 0)" {
-		t.Errorf("expected Tailwind text-blue-500 to apply a color, got %q", color)
-	}
+	assert.NotEmpty(t, color)
+	assert.NotEqual(t, "rgb(0, 0, 0)", color)
 }

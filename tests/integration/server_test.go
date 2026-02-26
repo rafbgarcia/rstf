@@ -8,6 +8,8 @@ import (
 
 	"github.com/rafbgarcia/rstf/internal/codegen"
 	"github.com/rafbgarcia/rstf/renderer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEndToEnd(t *testing.T) {
@@ -15,16 +17,12 @@ func TestEndToEnd(t *testing.T) {
 
 	// Step 1: Run codegen.
 	_, err := codegen.Generate(root)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
 
 	// Step 2: Start the renderer sidecar.
 	r := renderer.New()
-	if err := r.Start(root); err != nil {
-		t.Fatalf("renderer.Start: %v", err)
-	}
+	require.NoError(t, r.Start(root))
 	t.Cleanup(func() { r.Stop() })
 
 	// Step 3: Render the route (same request that server_gen.go would make).
@@ -44,9 +42,7 @@ func TestEndToEnd(t *testing.T) {
 			},
 		},
 	})
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Step 4: Verify full HTML output.
 	// Strip React's <!-- --> comment nodes (internal text boundary markers)
@@ -55,7 +51,5 @@ func TestEndToEnd(t *testing.T) {
 
 	want := `<html><head><title>Basic Example</title><title>Dashboard - Welcome to the dashboard!</title></head><body><header><h1>Basic Example</h1><nav><a href="/get-vs-ssr">Dashboard</a></nav></header><main><div><h2 class="text-blue-500">Welcome to the dashboard!</h2><button data-testid="counter">Count: 0</button><ul><li>First Post (published)</li><li>Draft Post (draft)</li></ul></div></main></body></html>`
 
-	if got != want {
-		t.Errorf("HTML mismatch.\n\nGot:\n%s\n\nWant:\n%s", got, want)
-	}
+	assert.Equal(t, want, got, "HTML mismatch")
 }

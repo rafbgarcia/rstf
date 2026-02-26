@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func testProjectRoot() string {
@@ -21,9 +23,7 @@ func testProjectRoot() string {
 func freePort(t *testing.T) string {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("finding free port: %v", err)
-	}
+	require.NoError(t, err, "finding free port")
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 	return fmt.Sprintf("%d", port)
@@ -43,7 +43,7 @@ func waitForServer(t *testing.T, url string, timeout time.Duration) {
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	t.Fatalf("server at %s not ready after %s", url, timeout)
+	require.FailNowf(t, "server not ready", "server at %s not ready after %s", url, timeout)
 }
 
 func stopProcessGroup(t *testing.T, cmd *exec.Cmd, grace time.Duration) {

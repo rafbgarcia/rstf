@@ -12,63 +12,50 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // setupTestApp creates an App with an in-memory SQLite database and a seeded posts table.
 func setupTestApp(t *testing.T) *rstf.App {
 	t.Helper()
 	app := rstf.NewApp()
-	if err := app.Database("sqlite3", ":memory:"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, app.Database("sqlite3", ":memory:"))
 	_, err := app.DB().Exec(`
 		CREATE TABLE posts (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			title TEXT NOT NULL,
 			published BOOLEAN NOT NULL DEFAULT FALSE
 		)`)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_, err = app.DB().Exec(`
 		INSERT INTO posts (title, published) VALUES
 			('First Post', true),
 			('Draft Post', false)`)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { app.Close() })
 	return app
 }
 
 func TestApp_Database(t *testing.T) {
 	app := rstf.NewApp()
-	if err := app.Database("sqlite3", ":memory:"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, app.Database("sqlite3", ":memory:"))
 	defer app.Close()
 
-	if app.DB() == nil {
-		t.Fatal("expected non-nil *sql.DB")
-	}
-	if err := app.DB().Ping(); err != nil {
-		t.Fatalf("ping failed: %v", err)
-	}
+	require.NotNil(t, app.DB())
+	require.NoError(t, app.DB().Ping(), "ping failed")
 }
 
 func TestApp_Database_InvalidDriver(t *testing.T) {
 	app := rstf.NewApp()
 	err := app.Database("nonexistent", "foo")
-	if err == nil {
-		t.Fatal("expected error for invalid driver")
-	}
+	require.Error(t, err)
 }
 
 func TestApp_DB_NilWhenNotConfigured(t *testing.T) {
 	app := rstf.NewApp()
-	if app.DB() != nil {
-		t.Fatal("expected nil DB when not configured")
-	}
+	require.Nil(t, app.DB())
 }
 
 func TestContext_DB_RawSQL(t *testing.T) {
@@ -80,24 +67,18 @@ func TestContext_DB_RawSQL(t *testing.T) {
 
 	rows, err := ctx.DB.QueryContext(ctx.Request.Context(),
 		"SELECT title, published FROM posts WHERE published = ?", true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer rows.Close()
 
 	var titles []string
 	for rows.Next() {
 		var title string
 		var published bool
-		if err := rows.Scan(&title, &published); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, rows.Scan(&title, &published))
 		titles = append(titles, title)
 	}
 
-	if len(titles) != 1 || titles[0] != "First Post" {
-		t.Errorf("expected [First Post], got %v", titles)
-	}
+	assert.Equal(t, []string{"First Post"}, titles)
 }
 
 func TestContext_DB_GORM(t *testing.T) {
@@ -107,9 +88,7 @@ func TestContext_DB_GORM(t *testing.T) {
 	gormDB, err := gorm.Open(sqlite.New(sqlite.Config{
 		Conn: app.DB(),
 	}), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	type Post struct {
 		ID        int
@@ -118,16 +97,9 @@ func TestContext_DB_GORM(t *testing.T) {
 	}
 
 	var posts []Post
-	if err := gormDB.Where("published = ?", true).Find(&posts).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	if len(posts) != 1 {
-		t.Fatalf("expected 1 published post, got %d", len(posts))
-	}
-	if posts[0].Title != "First Post" {
-		t.Errorf("expected 'First Post', got %q", posts[0].Title)
-	}
+	require.NoError(t, gormDB.Where("published = ?", true).Find(&posts).Error)
+	require.Len(t, posts, 1)
+	assert.Equal(t, "First Post", posts[0].Title)
 }
 
 func TestContext_DB_GORM_Create(t *testing.T) {
@@ -136,9 +108,7 @@ func TestContext_DB_GORM_Create(t *testing.T) {
 	gormDB, err := gorm.Open(sqlite.New(sqlite.Config{
 		Conn: app.DB(),
 	}), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	type Post struct {
 		ID        int
@@ -147,19 +117,13 @@ func TestContext_DB_GORM_Create(t *testing.T) {
 	}
 
 	newPost := Post{Title: "New Post", Published: true}
-	if err := gormDB.Create(&newPost).Error; err != nil {
-		t.Fatal(err)
-	}
-	if newPost.ID == 0 {
-		t.Error("expected auto-generated ID")
-	}
+	require.NoError(t, gormDB.Create(&newPost).Error)
+	assert.NotZero(t, newPost.ID)
 
 	// Verify via raw SQL that it was actually inserted.
 	var count int
 	app.DB().QueryRow("SELECT COUNT(*) FROM posts WHERE title = 'New Post'").Scan(&count)
-	if count != 1 {
-		t.Errorf("expected 1 row with title 'New Post', got %d", count)
-	}
+	assert.Equal(t, 1, count)
 }
 
 func TestContext_DB_Sqlx(t *testing.T) {
@@ -175,16 +139,9 @@ func TestContext_DB_Sqlx(t *testing.T) {
 	}
 
 	var posts []Post
-	if err := db.Select(&posts, "SELECT * FROM posts WHERE published = ?", true); err != nil {
-		t.Fatal(err)
-	}
-
-	if len(posts) != 1 {
-		t.Fatalf("expected 1 published post, got %d", len(posts))
-	}
-	if posts[0].Title != "First Post" {
-		t.Errorf("expected 'First Post', got %q", posts[0].Title)
-	}
+	require.NoError(t, db.Select(&posts, "SELECT * FROM posts WHERE published = ?", true))
+	require.Len(t, posts, 1)
+	assert.Equal(t, "First Post", posts[0].Title)
 }
 
 func TestContext_DB_Sqlx_NamedQuery(t *testing.T) {
@@ -199,23 +156,18 @@ func TestContext_DB_Sqlx_NamedQuery(t *testing.T) {
 
 	rows, err := db.NamedQuery("SELECT * FROM posts WHERE published = :published",
 		map[string]any{"published": true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer rows.Close()
 
 	var posts []Post
 	for rows.Next() {
 		var p Post
-		if err := rows.StructScan(&p); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, rows.StructScan(&p))
 		posts = append(posts, p)
 	}
 
-	if len(posts) != 1 || posts[0].Title != "First Post" {
-		t.Errorf("expected [First Post], got %v", posts)
-	}
+	require.Len(t, posts, 1)
+	assert.Equal(t, "First Post", posts[0].Title)
 }
 
 // TestContext_DB_SqlcPattern tests the pattern sqlc generates:
@@ -258,13 +210,9 @@ func TestContext_DB_SqlcPattern(t *testing.T) {
 	}
 
 	posts, err := listPublishedPosts(ctx.DB, ctx.Request.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(posts) != 1 || posts[0].Title != "First Post" {
-		t.Errorf("expected 1 published post 'First Post', got %v", posts)
-	}
+	require.NoError(t, err)
+	require.Len(t, posts, 1)
+	assert.Equal(t, "First Post", posts[0].Title)
 }
 
 // TestContext_DB_Transaction verifies that transactions via *sql.DB work correctly.
@@ -272,38 +220,28 @@ func TestContext_DB_Transaction(t *testing.T) {
 	app := setupTestApp(t)
 
 	tx, err := app.DB().Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	_, err = tx.Exec("INSERT INTO posts (title, published) VALUES (?, ?)", "TX Post", true)
 	if err != nil {
-		tx.Rollback()
-		t.Fatal(err)
+		_ = tx.Rollback()
 	}
+	require.NoError(t, err)
 
 	// Before commit, verify it's visible inside the tx but not outside.
 	var countInTx int
 	tx.QueryRow("SELECT COUNT(*) FROM posts WHERE title = 'TX Post'").Scan(&countInTx)
-	if countInTx != 1 {
-		t.Errorf("expected 1 inside tx, got %d", countInTx)
-	}
+	assert.Equal(t, 1, countInTx)
 
 	var countOutside int
 	app.DB().QueryRow("SELECT COUNT(*) FROM posts WHERE title = 'TX Post'").Scan(&countOutside)
-	if countOutside != 0 {
-		t.Errorf("expected 0 outside tx before commit, got %d", countOutside)
-	}
+	assert.Equal(t, 0, countOutside)
 
-	if err := tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, tx.Commit())
 
 	// After commit, visible everywhere.
 	app.DB().QueryRow("SELECT COUNT(*) FROM posts WHERE title = 'TX Post'").Scan(&countOutside)
-	if countOutside != 1 {
-		t.Errorf("expected 1 after commit, got %d", countOutside)
-	}
+	assert.Equal(t, 1, countOutside)
 }
 
 // TestContext_DB_Rollback verifies rollback discards changes.
@@ -311,16 +249,12 @@ func TestContext_DB_Rollback(t *testing.T) {
 	app := setupTestApp(t)
 
 	tx, err := app.DB().Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tx.Exec("INSERT INTO posts (title, published) VALUES (?, ?)", "Rolled Back", true)
 	tx.Rollback()
 
 	var count int
 	app.DB().QueryRow("SELECT COUNT(*) FROM posts WHERE title = 'Rolled Back'").Scan(&count)
-	if count != 0 {
-		t.Errorf("expected 0 after rollback, got %d", count)
-	}
+	assert.Equal(t, 0, count)
 }

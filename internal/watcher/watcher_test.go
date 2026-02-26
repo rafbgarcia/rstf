@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // waitBatch waits up to timeout for a batch of events on ch. Returns the batch
@@ -23,9 +26,7 @@ func TestGoFileChange(t *testing.T) {
 
 	events := make(chan []Event, 10)
 	w := New(dir, func(batch []Event) { events <- batch })
-	if err := w.Start(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, w.Start())
 	defer w.Stop()
 
 	// Write a .go file.
@@ -33,12 +34,8 @@ func TestGoFileChange(t *testing.T) {
 	os.WriteFile(path, []byte("package main"), 0644)
 
 	batch, ok := waitBatch(events, 2*time.Second)
-	if !ok {
-		t.Fatal("expected event for .go file, got none")
-	}
-	if batch[0].Kind != "go" {
-		t.Fatalf("expected kind %q, got %q", "go", batch[0].Kind)
-	}
+	require.True(t, ok, "expected event for .go file, got none")
+	assert.Equal(t, "go", batch[0].Kind)
 }
 
 func TestTsxFileChange(t *testing.T) {
@@ -46,21 +43,15 @@ func TestTsxFileChange(t *testing.T) {
 
 	events := make(chan []Event, 10)
 	w := New(dir, func(batch []Event) { events <- batch })
-	if err := w.Start(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, w.Start())
 	defer w.Stop()
 
 	path := filepath.Join(dir, "App.tsx")
 	os.WriteFile(path, []byte("export function View() {}"), 0644)
 
 	batch, ok := waitBatch(events, 2*time.Second)
-	if !ok {
-		t.Fatal("expected event for .tsx file, got none")
-	}
-	if batch[0].Kind != "tsx" {
-		t.Fatalf("expected kind %q, got %q", "tsx", batch[0].Kind)
-	}
+	require.True(t, ok, "expected event for .tsx file, got none")
+	assert.Equal(t, "tsx", batch[0].Kind)
 }
 
 func TestCssFileChange(t *testing.T) {
@@ -68,21 +59,15 @@ func TestCssFileChange(t *testing.T) {
 
 	events := make(chan []Event, 10)
 	w := New(dir, func(batch []Event) { events <- batch })
-	if err := w.Start(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, w.Start())
 	defer w.Stop()
 
 	path := filepath.Join(dir, "main.css")
 	os.WriteFile(path, []byte("body { color: red; }"), 0644)
 
 	batch, ok := waitBatch(events, 2*time.Second)
-	if !ok {
-		t.Fatal("expected event for .css file, got none")
-	}
-	if batch[0].Kind != "css" {
-		t.Fatalf("expected kind %q, got %q", "css", batch[0].Kind)
-	}
+	require.True(t, ok, "expected event for .css file, got none")
+	assert.Equal(t, "css", batch[0].Kind)
 }
 
 func TestTsFileIgnored(t *testing.T) {
@@ -90,9 +75,7 @@ func TestTsFileIgnored(t *testing.T) {
 
 	events := make(chan []Event, 10)
 	w := New(dir, func(batch []Event) { events <- batch })
-	if err := w.Start(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, w.Start())
 	defer w.Stop()
 
 	// Write a .ts file — should NOT produce an event.
@@ -100,9 +83,7 @@ func TestTsFileIgnored(t *testing.T) {
 	os.WriteFile(path, []byte("export const x = 1"), 0644)
 
 	_, ok := waitBatch(events, 500*time.Millisecond)
-	if ok {
-		t.Fatal("expected no event for .ts file, but got one")
-	}
+	assert.False(t, ok, "expected no event for .ts file, but got one")
 }
 
 func TestIgnoredDirectories(t *testing.T) {
@@ -115,9 +96,7 @@ func TestIgnoredDirectories(t *testing.T) {
 
 	events := make(chan []Event, 10)
 	w := New(dir, func(batch []Event) { events <- batch })
-	if err := w.Start(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, w.Start())
 	defer w.Stop()
 
 	// Write .go files inside ignored directories.
@@ -127,9 +106,7 @@ func TestIgnoredDirectories(t *testing.T) {
 	}
 
 	_, ok := waitBatch(events, 500*time.Millisecond)
-	if ok {
-		t.Fatal("expected no event for files in ignored directories, but got one")
-	}
+	assert.False(t, ok, "expected no event for files in ignored directories, but got one")
 }
 
 func TestNewSubdirectoryWatched(t *testing.T) {
@@ -137,9 +114,7 @@ func TestNewSubdirectoryWatched(t *testing.T) {
 
 	events := make(chan []Event, 10)
 	w := New(dir, func(batch []Event) { events <- batch })
-	if err := w.Start(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, w.Start())
 	defer w.Stop()
 
 	// Create a new subdirectory, then write a .go file inside it.
@@ -153,10 +128,6 @@ func TestNewSubdirectoryWatched(t *testing.T) {
 	os.WriteFile(path, []byte("package dashboard"), 0644)
 
 	batch, ok := waitBatch(events, 2*time.Second)
-	if !ok {
-		t.Fatal("expected event for .go file in new subdirectory, got none")
-	}
-	if batch[0].Kind != "go" {
-		t.Fatalf("expected kind %q, got %q", "go", batch[0].Kind)
-	}
+	require.True(t, ok, "expected event for .go file in new subdirectory, got none")
+	assert.Equal(t, "go", batch[0].Kind)
 }

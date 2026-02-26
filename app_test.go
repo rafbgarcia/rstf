@@ -3,77 +3,47 @@ package rstf
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestAppRequestBodyLimit_Default(t *testing.T) {
 	app := NewApp()
-	if got, want := app.RequestBodyLimitBytes(), DefaultBodyLimit; got != want {
-		t.Fatalf("RequestBodyLimitBytes() = %d, want %d", got, want)
-	}
+	require.Equal(t, DefaultBodyLimit, app.RequestBodyLimitBytes())
 }
 
 func TestAppRequestBodyLimit_Set(t *testing.T) {
 	app := NewApp()
-	if err := app.SetRequestBodyLimitBytes(2048); err != nil {
-		t.Fatalf("SetRequestBodyLimitBytes: %v", err)
-	}
-	if got, want := app.RequestBodyLimitBytes(), int64(2048); got != want {
-		t.Fatalf("RequestBodyLimitBytes() = %d, want %d", got, want)
-	}
+	require.NoError(t, app.SetRequestBodyLimitBytes(2048))
+	require.Equal(t, int64(2048), app.RequestBodyLimitBytes())
 }
 
 func TestAppRequestBodyLimit_SetInvalid(t *testing.T) {
 	app := NewApp()
-	if err := app.SetRequestBodyLimitBytes(0); err == nil {
-		t.Fatal("expected error for limit=0, got nil")
-	}
+	require.Error(t, app.SetRequestBodyLimitBytes(0))
 }
 
 func TestAppAdmissionDefaults(t *testing.T) {
 	app := NewApp()
-	if got, want := app.MaxConcurrentRequests(), DefaultMaxConcurrentRequests; got != want {
-		t.Fatalf("MaxConcurrentRequests() = %d, want %d", got, want)
-	}
-	if got, want := app.MaxQueuedRequests(), DefaultMaxQueuedRequests; got != want {
-		t.Fatalf("MaxQueuedRequests() = %d, want %d", got, want)
-	}
-	if got, want := app.QueueTimeout(), DefaultQueueTimeout; got != want {
-		t.Fatalf("QueueTimeout() = %s, want %s", got, want)
-	}
+	require.Equal(t, DefaultMaxConcurrentRequests, app.MaxConcurrentRequests())
+	require.Equal(t, DefaultMaxQueuedRequests, app.MaxQueuedRequests())
+	require.Equal(t, DefaultQueueTimeout, app.QueueTimeout())
 }
 
 func TestAppAdmissionSetters(t *testing.T) {
 	app := NewApp()
-	if err := app.SetMaxConcurrentRequests(3); err != nil {
-		t.Fatalf("SetMaxConcurrentRequests: %v", err)
-	}
-	if err := app.SetMaxQueuedRequests(4); err != nil {
-		t.Fatalf("SetMaxQueuedRequests: %v", err)
-	}
-	if err := app.SetQueueTimeout(150 * time.Millisecond); err != nil {
-		t.Fatalf("SetQueueTimeout: %v", err)
-	}
+	require.NoError(t, app.SetMaxConcurrentRequests(3))
+	require.NoError(t, app.SetMaxQueuedRequests(4))
+	require.NoError(t, app.SetQueueTimeout(150*time.Millisecond))
 
-	if got, want := app.MaxConcurrentRequests(), 3; got != want {
-		t.Fatalf("MaxConcurrentRequests() = %d, want %d", got, want)
-	}
-	if got, want := app.MaxQueuedRequests(), 4; got != want {
-		t.Fatalf("MaxQueuedRequests() = %d, want %d", got, want)
-	}
-	if got, want := app.QueueTimeout(), 150*time.Millisecond; got != want {
-		t.Fatalf("QueueTimeout() = %s, want %s", got, want)
-	}
+	require.Equal(t, 3, app.MaxConcurrentRequests())
+	require.Equal(t, 4, app.MaxQueuedRequests())
+	require.Equal(t, 150*time.Millisecond, app.QueueTimeout())
 }
 
 func TestAppAdmissionSettersRejectInvalid(t *testing.T) {
 	app := NewApp()
-	if err := app.SetMaxConcurrentRequests(0); err == nil {
-		t.Fatal("expected error for max concurrent requests=0")
-	}
-	if err := app.SetMaxQueuedRequests(0); err == nil {
-		t.Fatal("expected error for max queued requests=0")
-	}
-	if err := app.SetQueueTimeout(0); err == nil {
-		t.Fatal("expected error for queue timeout=0")
-	}
+	require.Error(t, app.SetMaxConcurrentRequests(0))
+	require.Error(t, app.SetMaxQueuedRequests(0))
+	require.Error(t, app.SetQueueTimeout(0))
 }
