@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -42,4 +44,34 @@ func waitForServer(t *testing.T, url string, timeout time.Duration) {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Fatalf("server at %s not ready after %s", url, timeout)
+}
+
+func stopProcessGroup(t *testing.T, cmd *exec.Cmd, grace time.Duration) {
+	t.Helper()
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+
+	pid := cmd.Process.Pid
+	_ = syscall.Kill(-pid, syscall.SIGINT)
+
+	waitCh := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(waitCh)
+	}()
+
+	select {
+	case <-waitCh:
+		return
+	case <-time.After(grace):
+	}
+
+	_ = syscall.Kill(-pid, syscall.SIGKILL)
+
+	select {
+	case <-waitCh:
+	case <-time.After(1 * time.Second):
+		t.Logf("process group %d did not exit after SIGKILL", pid)
+	}
 }

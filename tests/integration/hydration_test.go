@@ -52,20 +52,22 @@ func TestHydration(t *testing.T) {
 		t.Fatalf("starting server: %v", err)
 	}
 	t.Cleanup(func() {
-		server.Process.Signal(syscall.SIGINT)
-		server.Wait()
+		stopProcessGroup(t, server, 1*time.Second)
 	})
 
 	// Step 6: Wait for the server to be ready.
 	baseURL := fmt.Sprintf("http://localhost:%s", port)
-	waitForServer(t, baseURL+"/get-vs-ssr", 30*time.Second)
+	waitForServer(t, baseURL+"/get-vs-ssr", 5*time.Second)
 
 	// Step 7: Launch headless browser.
 	u := launcher.New().Headless(true).MustLaunch()
 	browser := rod.New().ControlURL(u).MustConnect()
 	t.Cleanup(func() { browser.MustClose() })
 
-	page := browser.MustPage(baseURL + "/get-vs-ssr")
+	page := browser.MustPage("about:blank")
+	page.MustSetExtraHeaders("Accept", "text/html")
+	page.MustNavigate(baseURL + "/get-vs-ssr")
+	page = page.Timeout(5 * time.Second)
 	page.MustWaitStable()
 
 	// Step 8: Verify SSR content is present.
@@ -177,12 +179,11 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 		t.Fatalf("starting server: %v", err)
 	}
 	t.Cleanup(func() {
-		server.Process.Signal(syscall.SIGINT)
-		server.Wait()
+		stopProcessGroup(t, server, 1*time.Second)
 	})
 
 	baseURL := fmt.Sprintf("http://localhost:%s", port)
-	waitForServer(t, baseURL+"/get-vs-ssr", 30*time.Second)
+	waitForServer(t, baseURL+"/get-vs-ssr", 5*time.Second)
 
 	// Step 6: Verify the HTML response contains the CSS link tag.
 	resp, err := http.Get(baseURL + "/get-vs-ssr")
@@ -212,7 +213,10 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 	browser := rod.New().ControlURL(u).MustConnect()
 	t.Cleanup(func() { browser.MustClose() })
 
-	page := browser.MustPage(baseURL + "/get-vs-ssr")
+	page := browser.MustPage("about:blank")
+	page.MustSetExtraHeaders("Accept", "text/html")
+	page.MustNavigate(baseURL + "/get-vs-ssr")
+	page = page.Timeout(5 * time.Second)
 	page.MustWaitStable()
 
 	// Tailwind's text-blue-500 should set the color on the h2.
