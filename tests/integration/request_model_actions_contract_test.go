@@ -54,28 +54,75 @@ func TestRequestModelActionsContract(t *testing.T) {
 		},
 	}
 
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/actions-return-null", nil)
+	if err != nil {
+		t.Fatalf("new request (POST): %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /actions-return-null: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("POST /actions-return-null: got %d, want 204", resp.StatusCode)
+	}
+
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
-		req, err := http.NewRequest(method, baseURL+"/actions-return-null", nil)
+		req, err := http.NewRequest(method, baseURL+"/actions-exhaustive-supported-verbs", nil)
 		if err != nil {
 			t.Fatalf("new request (%s): %v", method, err)
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			t.Fatalf("%s /actions-return-null: %v", method, err)
+			t.Fatalf("%s /actions-exhaustive-supported-verbs: %v", method, err)
 		}
+		payload, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
-		if resp.StatusCode != http.StatusNoContent {
-			t.Fatalf("%s /actions-return-null: got %d, want 204", method, resp.StatusCode)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s /actions-exhaustive-supported-verbs: got %d, want 200", method, resp.StatusCode)
+		}
+		var body struct {
+			Method string `json:"method"`
+		}
+		if err := json.Unmarshal(payload, &body); err != nil {
+			t.Fatalf("%s /actions-exhaustive-supported-verbs decode: %v", method, err)
+		}
+		if body.Method != method {
+			t.Fatalf("%s /actions-exhaustive-supported-verbs: got method=%q", method, body.Method)
 		}
 	}
 
+	req, err = http.NewRequest(http.MethodGet, baseURL+"/actions-exhaustive-supported-verbs", nil)
+	if err != nil {
+		t.Fatalf("new request (GET /actions-exhaustive-supported-verbs): %v", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /actions-exhaustive-supported-verbs: %v", err)
+	}
+	payload, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /actions-exhaustive-supported-verbs: got %d, want 200", resp.StatusCode)
+	}
+	var getBody struct {
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal(payload, &getBody); err != nil {
+		t.Fatalf("GET /actions-exhaustive-supported-verbs decode: %v", err)
+	}
+	if getBody.Method != http.MethodGet {
+		t.Fatalf("GET /actions-exhaustive-supported-verbs: got method=%q", getBody.Method)
+	}
+
 	reqBody := strings.NewReader(`{"title":"hello"}`)
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/actions-return-json", reqBody)
+	req, err = http.NewRequest(http.MethodPost, baseURL+"/actions-return-json", reqBody)
 	if err != nil {
 		t.Fatalf("new request (POST /actions-return-json): %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /actions-return-json: %v", err)
 	}
@@ -216,22 +263,22 @@ func TestRequestModelActionsContract(t *testing.T) {
 		t.Fatalf("HEAD /get-vs-ssr: expected empty body, got %q", string(headBody))
 	}
 
-	req, err = http.NewRequest(http.MethodOptions, baseURL+"/actions-return-null", nil)
+	req, err = http.NewRequest(http.MethodOptions, baseURL+"/actions-exhaustive-supported-verbs", nil)
 	if err != nil {
-		t.Fatalf("new request (OPTIONS /actions-return-null): %v", err)
+		t.Fatalf("new request (OPTIONS /actions-exhaustive-supported-verbs): %v", err)
 	}
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("OPTIONS /actions-return-null: %v", err)
+		t.Fatalf("OPTIONS /actions-exhaustive-supported-verbs: %v", err)
 	}
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("OPTIONS /actions-return-null: got %d, want 204", resp.StatusCode)
+		t.Fatalf("OPTIONS /actions-exhaustive-supported-verbs: got %d, want 204", resp.StatusCode)
 	}
 	allow := resp.Header.Get("Allow")
-	for _, method := range []string{"OPTIONS", "POST", "PUT", "PATCH", "DELETE"} {
+	for _, method := range []string{"OPTIONS", "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"} {
 		if !strings.Contains(allow, method) {
-			t.Fatalf("OPTIONS /actions-return-null: Allow header missing %q (got %q)", method, allow)
+			t.Fatalf("OPTIONS /actions-exhaustive-supported-verbs: Allow header missing %q (got %q)", method, allow)
 		}
 	}
 }

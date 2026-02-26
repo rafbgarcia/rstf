@@ -65,3 +65,4 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
   - `JSON`, `Text`, `Redirect`, `NoContent`.
 - Standard error envelope writer is implemented for action/API errors via `WriteErrorEnvelope`.
 - Integration test scenarios under `tests/integration/test_project/routes` now implement concrete handlers (no comment-only stubs).
+- Added focused scenario route `routes/actions-exhaustive-supported-verbs` to exercise the full supported method set in one place.

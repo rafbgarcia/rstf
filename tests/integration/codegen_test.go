@@ -18,8 +18,8 @@ func TestCodegen(t *testing.T) {
 	}
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
 
-	if result.RouteCount != 4 {
-		t.Errorf("expected 4 routes, got %d", result.RouteCount)
+	if result.RouteCount != 5 {
+		t.Errorf("expected 5 routes, got %d", result.RouteCount)
 	}
 
 	// Verify generated files exist.
