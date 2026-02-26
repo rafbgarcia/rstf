@@ -9,6 +9,7 @@ import (
 	"time"
 
 	rstf "github.com/rafbgarcia/rstf"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRouteAdmissionSlow(t *testing.T) {
@@ -86,20 +87,13 @@ func TestRouteAdmissionSlow(t *testing.T) {
 	<-firstDone
 	close(results)
 
-	if len(results) != 2 {
-		t.Fatalf("expected 2 overload responses, got %d", len(results))
-	}
+	require.Equal(t, 2, len(results), "expected 2 overload responses")
 	reasons := map[string]int{}
 	for r := range results {
-		if r.status != http.StatusServiceUnavailable {
-			t.Fatalf("overload status = %d, want 503", r.status)
-		}
-		if r.code != string(rstf.ErrorCodeOverloaded) {
-			t.Fatalf("overload code = %q, want %q", r.code, rstf.ErrorCodeOverloaded)
-		}
+		require.Equal(t, http.StatusServiceUnavailable, r.status, "overload status")
+		require.Equal(t, string(rstf.ErrorCodeOverloaded), r.code, "overload code")
 		reasons[r.reason]++
 	}
-	if reasons["queue_full"] != 1 || reasons["queue_timeout"] != 1 {
-		t.Fatalf("expected one queue_full and one queue_timeout; got %+v", reasons)
-	}
+	require.Equal(t, 1, reasons["queue_full"], "overload reason queue_full")
+	require.Equal(t, 1, reasons["queue_timeout"], "overload reason queue_timeout")
 }

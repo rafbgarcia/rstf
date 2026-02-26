@@ -3,6 +3,8 @@ package route_tests
 import (
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRouteActionsRedirect(t *testing.T) {
@@ -15,18 +17,10 @@ func TestRouteActionsRedirect(t *testing.T) {
 	}
 
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/actions-redirect", nil)
-	if err != nil {
-		t.Fatalf("new request (POST): %v", err)
-	}
+	require.NoErrorf(t, err, "new request (POST)")
 	resp, err := noRedirectClient.Do(req)
-	if err != nil {
-		t.Fatalf("POST /actions-redirect: %v", err)
-	}
+	require.NoErrorf(t, err, "POST /actions-redirect")
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("POST /actions-redirect: got %d, want 303", resp.StatusCode)
-	}
-	if got := resp.Header.Get("Location"); got != "/get-vs-ssr" {
-		t.Fatalf("POST /actions-redirect: got Location=%q, want /get-vs-ssr", got)
-	}
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode, "POST /actions-redirect")
+	require.Equal(t, "/get-vs-ssr", resp.Header.Get("Location"), "POST /actions-redirect location")
 }

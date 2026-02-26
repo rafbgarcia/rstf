@@ -3,35 +3,25 @@ package route_tests
 import (
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRouteActionsReturnNull(t *testing.T) {
 	baseURL := ensureRouteContractServerRunning(t)
 
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/actions-return-null", nil)
-	if err != nil {
-		t.Fatalf("new request (POST): %v", err)
-	}
+	require.NoErrorf(t, err, "new request (POST)")
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("POST /actions-return-null: %v", err)
-	}
+	require.NoErrorf(t, err, "POST /actions-return-null")
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("POST /actions-return-null: got %d, want 204", resp.StatusCode)
-	}
+	require.Equal(t, http.StatusNoContent, resp.StatusCode, "POST /actions-return-null")
 
 	req, err = http.NewRequest(http.MethodGet, baseURL+"/actions-return-null", nil)
-	if err != nil {
-		t.Fatalf("new request (GET json): %v", err)
-	}
+	require.NoErrorf(t, err, "new request (GET json)")
 	req.Header.Set("Accept", "application/json")
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("GET /actions-return-null (json): %v", err)
-	}
+	require.NoErrorf(t, err, "GET /actions-return-null (json)")
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusNotAcceptable {
-		t.Fatalf("GET /actions-return-null (json): got %d, want 406", resp.StatusCode)
-	}
+	require.Equal(t, http.StatusNotAcceptable, resp.StatusCode, "GET /actions-return-null (json)")
 }

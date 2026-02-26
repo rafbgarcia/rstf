@@ -4,74 +4,48 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRouteGetVsSSR(t *testing.T) {
 	baseURL := ensureRouteContractServerRunning(t)
 
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/get-vs-ssr", nil)
-	if err != nil {
-		t.Fatalf("new request (GET json): %v", err)
-	}
+	require.NoErrorf(t, err, "new request (GET json)")
 	req.Header.Set("Accept", "application/json")
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("GET /get-vs-ssr (json): %v", err)
-	}
+	require.NoErrorf(t, err, "GET /get-vs-ssr (json)")
 	payload, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /get-vs-ssr (json): got %d, want 200", resp.StatusCode)
-	}
+	require.Equal(t, http.StatusOK, resp.StatusCode, "GET /get-vs-ssr (json)")
 	var getResp struct {
 		Source string `json:"source"`
 		Route  string `json:"route"`
 	}
-	if err := json.Unmarshal(payload, &getResp); err != nil {
-		t.Fatalf("GET /get-vs-ssr decode: %v\nbody=%s", err, string(payload))
-	}
-	if getResp.Source != "get" || getResp.Route != "/get-vs-ssr" {
-		t.Fatalf("GET /get-vs-ssr unexpected payload: %+v", getResp)
-	}
+	require.NoErrorf(t, json.Unmarshal(payload, &getResp), "GET /get-vs-ssr decode: body=%s", string(payload))
+	require.Equal(t, "get", getResp.Source, "GET /get-vs-ssr source")
+	require.Equal(t, "/get-vs-ssr", getResp.Route, "GET /get-vs-ssr route")
 
 	req, err = http.NewRequest(http.MethodGet, baseURL+"/get-vs-ssr", nil)
-	if err != nil {
-		t.Fatalf("new request (GET html): %v", err)
-	}
+	require.NoErrorf(t, err, "new request (GET html)")
 	req.Header.Set("Accept", "text/html")
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("GET /get-vs-ssr (html): %v", err)
-	}
+	require.NoErrorf(t, err, "GET /get-vs-ssr (html)")
 	htmlPayload, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /get-vs-ssr (html): got %d, want 200", resp.StatusCode)
-	}
-	if !strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
-		t.Fatalf("GET /get-vs-ssr (html): expected text/html content-type, got %q", resp.Header.Get("Content-Type"))
-	}
-	if !strings.Contains(string(htmlPayload), "<!DOCTYPE html>") {
-		t.Fatalf("GET /get-vs-ssr (html): expected HTML document body=%s", string(htmlPayload))
-	}
+	require.Equal(t, http.StatusOK, resp.StatusCode, "GET /get-vs-ssr (html)")
+	require.Contains(t, resp.Header.Get("Content-Type"), "text/html", "GET /get-vs-ssr (html)")
+	require.Contains(t, string(htmlPayload), "<!DOCTYPE html>", "GET /get-vs-ssr (html)")
 
 	req, err = http.NewRequest(http.MethodHead, baseURL+"/get-vs-ssr", nil)
-	if err != nil {
-		t.Fatalf("new request (HEAD json): %v", err)
-	}
+	require.NoErrorf(t, err, "new request (HEAD json)")
 	req.Header.Set("Accept", "application/json")
 	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("HEAD /get-vs-ssr: %v", err)
-	}
+	require.NoErrorf(t, err, "HEAD /get-vs-ssr")
 	headBody, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("HEAD /get-vs-ssr: got %d, want 200", resp.StatusCode)
-	}
-	if len(headBody) != 0 {
-		t.Fatalf("HEAD /get-vs-ssr: expected empty body, got %q", string(headBody))
-	}
+	require.Equal(t, http.StatusOK, resp.StatusCode, "HEAD /get-vs-ssr")
+	require.Len(t, headBody, 0, "HEAD /get-vs-ssr body")
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	rstf "github.com/rafbgarcia/rstf"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRouteActionsReturnJSON(t *testing.T) {
@@ -16,32 +17,21 @@ func TestRouteActionsReturnJSON(t *testing.T) {
 
 	reqBody := strings.NewReader(`{"title":"hello"}`)
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/actions-return-json", reqBody)
-	if err != nil {
-		t.Fatalf("new request (POST success): %v", err)
-	}
+	require.NoErrorf(t, err, "new request (POST success)")
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("POST /actions-return-json: %v", err)
-	}
+	require.NoErrorf(t, err, "POST /actions-return-json")
 	payload, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("POST /actions-return-json: got %d, want 201", resp.StatusCode)
-	}
-	if !strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
-		t.Fatalf("POST /actions-return-json: expected application/json content-type, got %q", resp.Header.Get("Content-Type"))
-	}
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "POST /actions-return-json")
+	require.Contains(t, resp.Header.Get("Content-Type"), "application/json", "POST /actions-return-json")
 	var created struct {
 		ID     string `json:"id"`
 		Status string `json:"status"`
 	}
-	if err := json.Unmarshal(payload, &created); err != nil {
-		t.Fatalf("POST /actions-return-json decode: %v\nbody=%s", err, string(payload))
-	}
-	if created.ID != "post_123" || created.Status != "created" {
-		t.Fatalf("POST /actions-return-json unexpected payload: %+v", created)
-	}
+	require.NoErrorf(t, json.Unmarshal(payload, &created), "POST /actions-return-json decode: body=%s", string(payload))
+	require.Equal(t, "post_123", created.ID, "POST /actions-return-json id")
+	require.Equal(t, "created", created.Status, "POST /actions-return-json status")
 
 	assertErrorEnvelope(
 		t,
@@ -76,9 +66,7 @@ func TestRouteActionsReturnJSON(t *testing.T) {
 		http.StatusRequestEntityTooLarge,
 		string(rstf.ErrorCodePayloadTooLarge),
 	)
-	if got := details["limitBytes"]; got != float64(1024) {
-		t.Fatalf("POST /actions-return-json payload_too_large: got limitBytes=%v, want 1024", got)
-	}
+	require.Equal(t, float64(1024), details["limitBytes"], "POST /actions-return-json payload_too_large")
 
 	assertErrorEnvelope(
 		t,

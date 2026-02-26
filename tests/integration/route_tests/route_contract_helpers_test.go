@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rafbgarcia/rstf/internal/codegen"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -58,7 +59,7 @@ func ensureRouteContractServerRunning(t *testing.T) string {
 	})
 
 	if routeServerErr != nil {
-		t.Fatalf("route test server setup failed: %v", routeServerErr)
+		require.NoErrorf(t, routeServerErr, "route test server setup failed")
 	}
 	return routeServerURL
 }
@@ -105,9 +106,7 @@ func testProjectRoot() string {
 func freePort(t *testing.T) string {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("finding free port: %v", err)
-	}
+	require.NoErrorf(t, err, "finding free port")
 	port := l.Addr().(*net.TCPAddr).Port
 	_ = l.Close()
 	return fmt.Sprintf("%d", port)
@@ -152,32 +151,22 @@ func assertErrorEnvelope(
 ) map[string]any {
 	t.Helper()
 	req, err := http.NewRequest(method, baseURL+path, body)
-	if err != nil {
-		t.Fatalf("new request (%s %s): %v", method, path, err)
-	}
+	require.NoErrorf(t, err, "new request (%s %s)", method, path)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("%s %s: %v", method, path, err)
-	}
+	require.NoErrorf(t, err, "%s %s", method, path)
 	payload, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if resp.StatusCode != wantStatus {
-		t.Fatalf("%s %s: got %d, want %d (body=%s)", method, path, resp.StatusCode, wantStatus, string(payload))
-	}
+	require.Equalf(t, wantStatus, resp.StatusCode, "%s %s: body=%s", method, path, string(payload))
 	var env struct {
 		Error struct {
 			Code    string         `json:"code"`
 			Details map[string]any `json:"details"`
 		} `json:"error"`
 	}
-	if err := json.Unmarshal(payload, &env); err != nil {
-		t.Fatalf("%s %s decode envelope: %v\nbody=%s", method, path, err, string(payload))
-	}
-	if env.Error.Code != wantCode {
-		t.Fatalf("%s %s: got code=%q, want %q", method, path, env.Error.Code, wantCode)
-	}
+	require.NoErrorf(t, json.Unmarshal(payload, &env), "%s %s decode envelope: body=%s", method, path, string(payload))
+	require.Equalf(t, wantCode, env.Error.Code, "%s %s", method, path)
 	return env.Error.Details
 }
