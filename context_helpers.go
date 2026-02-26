@@ -72,14 +72,15 @@ func (c *Context) BindJSON(target any) error {
 	}
 
 	reader := io.Reader(c.Request.Body)
+	limit := c.RequestBodyLimitBytes()
 	if c.Writer != nil {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, DefaultBodyLimit)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		reader = c.Request.Body
 	}
 
 	dec := json.NewDecoder(reader)
 	if err := dec.Decode(target); err != nil {
-		return mapDecodeError(err)
+		return mapDecodeError(err, limit)
 	}
 
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
@@ -194,8 +195,8 @@ func requestErrorFrom(err error) *RequestError {
 	if errors.As(err, &maxBytesErr) {
 		return &RequestError{
 			Code:    ErrorCodePayloadTooLarge,
-			Message: "payload exceeds 1 MiB limit",
-			Details: map[string]any{"limitBytes": DefaultBodyLimit},
+			Message: "payload exceeds configured limit",
+			Details: map[string]any{"limitBytes": maxBytesErr.Limit},
 			Status:  http.StatusRequestEntityTooLarge,
 		}
 	}
@@ -223,7 +224,7 @@ func mapErrorCodeToStatus(code ErrorCode) int {
 	}
 }
 
-func mapDecodeError(err error) error {
+func mapDecodeError(err error, limit int64) error {
 	if errors.Is(err, io.EOF) {
 		return &RequestError{
 			Code:    ErrorCodeInvalidPayload,
@@ -236,8 +237,8 @@ func mapDecodeError(err error) error {
 	if errors.As(err, &maxBytesErr) {
 		return &RequestError{
 			Code:    ErrorCodePayloadTooLarge,
-			Message: "payload exceeds 1 MiB limit",
-			Details: map[string]any{"limitBytes": DefaultBodyLimit},
+			Message: "payload exceeds configured limit",
+			Details: map[string]any{"limitBytes": limit},
 			Status:  http.StatusRequestEntityTooLarge,
 		}
 	}

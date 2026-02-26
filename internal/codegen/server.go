@@ -471,6 +471,10 @@ func writeHTMLRenderBlock(
 	b.WriteString("\t\t\t\tctx := rstf.NewContext(req)\n")
 	if hasOnServerStart {
 		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+		b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
+		b.WriteString("\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
+		b.WriteString("\t\t\t\t\treturn\n")
+		b.WriteString("\t\t\t\t}\n")
 	}
 
 	b.WriteString("\t\t\t\tsd := map[string]map[string]any{}\n")
@@ -509,6 +513,10 @@ func writeHTMLRenderBlockHead(
 	b.WriteString("\t\t\t\tctx := rstf.NewContext(req)\n")
 	if hasOnServerStart {
 		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+		b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
+		b.WriteString("\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
+		b.WriteString("\t\t\t\t\treturn\n")
+		b.WriteString("\t\t\t\t}\n")
 	}
 
 	b.WriteString("\t\t\t\tsd := map[string]map[string]any{}\n")
@@ -546,6 +554,12 @@ func writeMethodCallBlock(b *strings.Builder, route routeEntry, hasOnServerStart
 	b.WriteString("\t\t\t\tctx.Writer = tracker\n")
 	if hasOnServerStart {
 		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+		b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
+		b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")
+		b.WriteString("\t\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
+		b.WriteString("\t\t\t\t\t}\n")
+		b.WriteString("\t\t\t\t\treturn\n")
+		b.WriteString("\t\t\t\t}\n")
 	}
 	fmt.Fprintf(b, "\t\t\t\terr := %s.%s(ctx)\n", alias, methodName)
 	b.WriteString("\t\t\t\tif err != nil {\n")
@@ -567,6 +581,12 @@ func writeMethodCallBlockHead(b *strings.Builder, route routeEntry, hasOnServerS
 	b.WriteString("\t\t\t\tctx.Writer = rstf.NewHeadWriter(tracker)\n")
 	if hasOnServerStart {
 		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+		b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
+		b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")
+		b.WriteString("\t\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
+		b.WriteString("\t\t\t\t\t}\n")
+		b.WriteString("\t\t\t\t\treturn\n")
+		b.WriteString("\t\t\t\t}\n")
 	}
 	fmt.Fprintf(b, "\t\t\t\terr := %s.%s(ctx)\n", alias, methodName)
 	b.WriteString("\t\t\t\tif err != nil {\n")
