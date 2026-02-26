@@ -15,4 +15,10 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
 - A clear handler convention for page, action, and API endpoints.
 - Typed request parsing and response helpers.
 - Consistent status/redirect semantics for actions.
+- Request size limits and payload validation contracts for SSR/action/API endpoints.
+- Standard oversized/invalid payload error envelope and status mapping.
 
+## Production Hardening Criteria
+- Define default and configurable request body size limits.
+- Define backpressure/admission behavior when request queues are saturated.
+- Ensure request parsing failures are deterministic and safe for production responses.

@@ -2,6 +2,8 @@
 
 Recommended implementation order and why each is sequenced there.
 
+Note: Production-hardening requirements for SSR/runtime operations are explicitly tracked in Workfronts 01, 03, 08, and 09.
+
 1. [01_request_model_actions](/Users/rafa/github.com/rafbgarcia/rstf/docs/workfronts/01_request_model_actions.md)
 Reason: Defines the core runtime contract for everything beyond read-only SSR.
 
