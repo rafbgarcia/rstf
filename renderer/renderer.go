@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -86,12 +87,32 @@ func (r *Renderer) Stop() error {
 	if r.cmd == nil || r.cmd.Process == nil {
 		return nil
 	}
+
 	if err := r.cmd.Process.Signal(os.Interrupt); err != nil {
 		// Process may have already exited.
 		return nil
 	}
-	// Ignore the exit error — SIGINT causes a non-zero exit code which is expected.
-	r.cmd.Wait()
+
+	var once sync.Once
+	waitCh := make(chan struct{})
+	go func() {
+		once.Do(func() { _ = r.cmd.Wait() })
+		close(waitCh)
+	}()
+
+	select {
+	case <-waitCh:
+		return nil
+	case <-time.After(2 * time.Second):
+		// Fall back to force-kill to avoid hanging test/process shutdown.
+		_ = r.cmd.Process.Kill()
+	}
+
+	select {
+	case <-waitCh:
+	case <-time.After(2 * time.Second):
+	}
+
 	return nil
 }
 

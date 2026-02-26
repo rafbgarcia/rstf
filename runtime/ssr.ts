@@ -195,5 +195,16 @@ main().catch((err) => {
 });
 
 process.on("SIGINT", () => {
-  server.close(() => process.exit(0));
+  server.closeIdleConnections?.();
+  server.closeAllConnections?.();
+
+  const forceExit = setTimeout(() => {
+    process.exit(0);
+  }, 1500);
+  forceExit.unref();
+
+  server.close(() => {
+    clearTimeout(forceExit);
+    process.exit(0);
+  });
 });

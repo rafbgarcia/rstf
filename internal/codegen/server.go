@@ -227,11 +227,10 @@ func writeAcceptHelpers(b *strings.Builder) {
 		return true
 	}
 
-	bestQ := -1.0
-	bestIsHTML := false
-	bestOrder := 0
+	hasAny := false
+	hasWildcard := false
 	parts := strings.Split(accept, ",")
-	for i, part := range parts {
+	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -249,21 +248,21 @@ func writeAcceptHelpers(b *strings.Builder) {
 		if q <= 0 {
 			continue
 		}
+		hasAny = true
 
 		mediaType = strings.ToLower(strings.TrimSpace(mediaType))
-		isHTML := mediaType == "text/html" || mediaType == "application/xhtml+xml" || mediaType == "*/*"
-
-		if q > bestQ || (q == bestQ && i >= bestOrder) {
-			bestQ = q
-			bestIsHTML = isHTML
-			bestOrder = i
+		if mediaType == "text/html" || mediaType == "application/xhtml+xml" {
+			return true
+		}
+		if mediaType == "*/*" {
+			hasWildcard = true
 		}
 	}
 
-	if bestQ < 0 {
+	if !hasAny {
 		return true
 	}
-	return bestIsHTML
+	return hasWildcard
 }
 
 func allowHeader(methods []string) string {
