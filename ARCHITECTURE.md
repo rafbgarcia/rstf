@@ -20,7 +20,7 @@ flowchart TB
     subgraph Request["Request flow (GET /dashboard)"]
         browser["Browser"] -->|GET /dashboard| go_server["Go HTTP server\n(.rstf/server_gen.go)"]
         go_server -->|"app.SSR(ctx)\ndashboard.SSR(ctx)"| ssr_calls["Call SSR handlers\nstruct → map via JSON"]
-        ssr_calls -->|"POST /render"| sidecar["Bun sidecar\n(runtime/ssr.ts)"]
+        ssr_calls -->|"POST /render"| sidecar["Node sidecar\n(runtime/ssr.ts)"]
         sidecar -->|"__setServerData()\nrenderToString(\n  Layout > Route\n)"| html["HTML string"]
         html --> browser
     end

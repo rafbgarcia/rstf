@@ -44,7 +44,7 @@ func TestHydration(t *testing.T) {
 	}
 
 	// Step 5: Start the compiled server. The generated server handles SIGINT
-	// gracefully — it stops the Bun sidecar before exiting.
+	// gracefully — it stops the Node sidecar before exiting.
 	server := exec.Command(filepath.Join(root, ".rstf", "server"), "--port", port)
 	server.Dir = root
 	server.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -139,7 +139,7 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 		t.Fatalf("writing build-css.mjs: %v", err)
 	}
 
-	cmd := exec.Command("bun", "run", scriptPath)
+	cmd := exec.Command("node", scriptPath)
 	cmd.Dir = root
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

@@ -72,7 +72,7 @@ Components import server data via `@rstf/{path}`, where `{path}` matches the com
 | `routes/dashboard/index.tsx` | `@rstf/routes/dashboard` | `.rstf/generated/routes/dashboard.ts` |
 | `shared/ui/user-avatar/index.tsx` | `@rstf/shared/ui/user-avatar` | `.rstf/generated/shared/ui/user-avatar.ts` |
 
-The `tsconfig.json` `paths` mapping handles this for TypeScript. Bun respects `tsconfig.json` paths at runtime for SSR. esbuild auto-discovers `tsconfig.json` paths when bundling, so the same mapping works for client-side bundling.
+The `tsconfig.json` `paths` mapping handles this for TypeScript. Node (with tsx loader) resolves TypeScript/TSX at runtime for SSR. esbuild auto-discovers `tsconfig.json` paths when bundling, so the same mapping works for client-side bundling.
 
 ## Generated runtime module format
 

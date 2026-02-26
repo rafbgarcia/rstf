@@ -255,7 +255,7 @@ func buildCSS() error {
 }
 
 // buildCSSWithPostCSS writes a small build script to .rstf/ and runs it with
-// bun. The script loads the user's postcss.config.mjs and processes main.css.
+// node. The script loads the user's postcss.config.mjs and processes main.css.
 func buildCSSWithPostCSS(outFile string) error {
 	script := `import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { resolve } from "path";
@@ -286,7 +286,7 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 		return fmt.Errorf("writing build-css.mjs: %w", err)
 	}
 
-	cmd := exec.Command("bun", "run", scriptPath)
+	cmd := exec.Command("node", scriptPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("postcss processing: %w", err)

@@ -24,7 +24,7 @@ func New() *Renderer {
 	return &Renderer{}
 }
 
-// Start spawns the Bun sidecar process and waits for it to report its port.
+// Start spawns the Node sidecar process and waits for it to report its port.
 func (r *Renderer) Start(projectRoot string) error {
 	ssrPath := filepath.Join(frameworkRoot(), "runtime", "ssr.ts")
 
@@ -33,7 +33,8 @@ func (r *Renderer) Start(projectRoot string) error {
 		return fmt.Errorf("renderer: resolve project root: %w", err)
 	}
 
-	r.cmd = exec.Command("bun", "run", ssrPath, "--project-root", absRoot)
+	r.cmd = exec.Command("node", "--import", "tsx", ssrPath, "--project-root", absRoot)
+	r.cmd.Dir = frameworkRoot()
 	r.cmd.Env = append(os.Environ(), "NO_COLOR=1")
 	r.cmd.Stderr = os.Stderr
 
@@ -43,7 +44,7 @@ func (r *Renderer) Start(projectRoot string) error {
 	}
 
 	if err := r.cmd.Start(); err != nil {
-		return fmt.Errorf("renderer: start bun: %w", err)
+		return fmt.Errorf("renderer: start node: %w", err)
 	}
 
 	// Read the port from the first line of stdout with a timeout.

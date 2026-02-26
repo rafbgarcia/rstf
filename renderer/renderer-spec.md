@@ -4,7 +4,7 @@
 
 The SSR renderer turns a React component tree into an HTML string on the server. It consists of:
 
-1. **Bun sidecar** (`runtime/ssr.ts`) — HTTP server running in Bun that executes `renderToString`
+1. **Node sidecar** (`runtime/ssr.ts`) — HTTP server running in Node that executes `renderToString`
 2. **Go renderer client** (`renderer/renderer.go`) — manages the sidecar process and sends render requests
 
 The renderer returns raw component HTML only — no HTML shell, no hydration scripts. Page assembly (DOCTYPE, script injection) is the caller's responsibility.
@@ -26,7 +26,7 @@ Component paths are **directory paths**. The sidecar resolves them using the fol
 - Route/shared components: `"routes/dashboard"` → `{project-root}/routes/dashboard/index.tsx`
 - Layout: `"main"` → `{project-root}/main.tsx`
 
-The project root is passed as a CLI argument: `bun run runtime/ssr.ts --project-root /path/to/app`.
+The project root is passed as a CLI argument: `node --import tsx runtime/ssr.ts --project-root /path/to/app`.
 
 ## Render sequence
 
@@ -36,19 +36,19 @@ The project root is passed as a CLI argument: `bun run runtime/ssr.ts --project-
 
 ## Concurrency safety
 
-`__setServerData` mutates a module-level variable. This is safe because `renderToString` is synchronous and Bun runs a single-threaded event loop. **Critical rule: no `await` between `__setServerData` and `renderToString`.** All async work (dynamic `import()` calls) must complete before the synchronous set-then-render block.
+`__setServerData` mutates a module-level variable. This is safe because `renderToString` is synchronous and Node runs a single-threaded event loop. **Critical rule: no `await` between `__setServerData` and `renderToString`.** All async work (dynamic `import()` calls) must complete before the synchronous set-then-render block.
 
 ## Sidecar lifecycle
 
-**Start:** The Go renderer spawns `bun run runtime/ssr.ts`. The sidecar listens on a random port and prints the port to stdout. The Go side reads it (10-second timeout).
+**Start:** The Go renderer spawns `node --import tsx runtime/ssr.ts`. The sidecar listens on a random port and prints the port to stdout. The Go side reads it (10-second timeout).
 
-**Stop:** Go sends SIGINT to the Bun process and waits for exit.
+**Stop:** Go sends SIGINT to the Node process and waits for exit.
 
 **Cache:** The sidecar caches imported modules for performance. A `POST /invalidate` endpoint clears all caches — called by the file watcher during development.
 
-## Why Bun (not embedded V8)
+## Why Node sidecar (not embedded V8)
 
 - Full React/JSX compatibility with no API gaps.
 - No CGO dependency — keeps the Go build simple.
-- Fast startup (~10ms) and built-in TypeScript/JSX transpilation.
-- Can be swapped for Node or Deno without changing the Go side.
+- Fast startup and TypeScript/JSX transpilation via Node + `tsx`.
+- Runtime can still be swapped (e.g. Deno) without changing the Go side protocol.

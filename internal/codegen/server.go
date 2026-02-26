@@ -28,7 +28,7 @@ type routeEntry struct {
 
 // GenerateServer produces the content of .rstf/server_gen.go — the Go entry
 // point that wires routes to handlers, calls SSR functions, and renders via
-// the Bun sidecar.
+// the Node sidecar.
 //
 // Parameters:
 //   - modulePath: the user's Go module path (from go.mod), e.g. "github.com/user/myapp"

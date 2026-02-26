@@ -1,6 +1,6 @@
 # Runtime Specification
 
-The `runtime/` directory contains the JavaScript/TypeScript code that runs outside of Go — server-side (Bun sidecar) and client-side (hydration in the browser).
+The `runtime/` directory contains the JavaScript/TypeScript code that runs outside of Go — server-side (Node sidecar) and client-side (hydration in the browser).
 
 ## Server-side: SSR sidecar (`runtime/ssr.ts`)
 
@@ -10,7 +10,7 @@ See `renderer/renderer-spec.md` for the full protocol.
 
 ### Why `serverData()` is a function
 
-The generated module is cached by the Bun sidecar across requests. A function call ensures the component reads the current request's data at render time, not stale data from import time. See `renderer/renderer-spec.md` for concurrency safety.
+The generated module is cached by the Node sidecar across requests. A function call ensures the component reads the current request's data at render time, not stale data from import time. See `renderer/renderer-spec.md` for concurrency safety.
 
 ### Scoping
 
@@ -36,7 +36,7 @@ The generated `server_gen.go` assembles the full HTML page after rendering:
 
 ### Hydration entries
 
-For each SSR route, codegen generates a hydration entry (`.rstf/entries/{name}.entry.tsx`) that imports the layout, route, all generated modules, and calls `hydrateRoot`. These are bundled by `bun build` into `.rstf/static/{route}/bundle.js`.
+For each SSR route, codegen generates a hydration entry (`.rstf/entries/{name}.entry.tsx`) that imports the layout, route, all generated modules, and calls `hydrateRoot`. These are bundled by `esbuild (Go API)` into `.rstf/static/{route}/bundle.js`.
 
 ### Client-side module initialization
 

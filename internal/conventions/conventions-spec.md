@@ -116,11 +116,11 @@ Folder names in `routes/` are converted to URL patterns:
 
 ## Handler functions
 
-The framework recognizes the exported function name `SSR` and maps it to `GET` requests. The generated server calls `SSR()`, passes the returned struct to the Bun sidecar, and returns the rendered HTML.
+The framework recognizes the exported function name `SSR` and maps it to `GET` requests. The generated server calls `SSR()`, passes the returned struct to the Node sidecar, and returns the rendered HTML.
 
 | Go function | HTTP method | Behavior |
 |-------------|-------------|----------|
-| `SSR` | GET | Calls function, renders React component via Bun sidecar, returns HTML |
+| `SSR` | GET | Calls function, renders React component via Node sidecar, returns HTML |
 
 Additional HTTP method handlers (`GET` for JSON, `POST`, `PUT`, `DELETE`) are planned but not yet designed. They will be specified in a separate document when implemented.
 

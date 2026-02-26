@@ -23,7 +23,7 @@ Creates:
 Before scaffolding, `rstf init` verifies:
 
 - Go is installed (`go version`)
-- Bun is installed (`bun --version`)
+- Node.js is installed (`node --version`)
 
 If either is missing, it prints instructions and exits.
 
@@ -40,14 +40,14 @@ Starts the development server.
 1. **Run codegen** (`codegen.Generate(".")`) — parse route directories, generate `.rstf/types/{route}.d.ts` type declarations, `.rstf/generated/{path}.ts` dual-mode runtime modules, `.rstf/entries/{name}.entry.tsx` hydration entries, and `.rstf/server_gen.go`.
 2. **Bundle client JS** — bundle all hydration entries via esbuild (Go API, single in-process call) to produce `.rstf/static/{name}/bundle.js` per route.
 3. **Build CSS** (if `main.css` exists) — if `postcss.config.mjs` is present, process `main.css` through PostCSS via a generated build script; otherwise copy `main.css` as-is. Output goes to `.rstf/static/main.css`. The generated server detects this file at startup and injects a `<link>` tag.
-4. **Start Go HTTP server** — `go run ./.rstf/server_gen.go --port {port}`, which itself starts the Bun sidecar and listens on the specified port. The generated server serves static assets from `/.rstf/static/` and assembles full HTML pages with `<!DOCTYPE html>`, optional CSS link, server data injection, and bundle script tags.
+4. **Start Go HTTP server** — `go run ./.rstf/server_gen.go --port {port}`, which itself starts the Node sidecar and listens on the specified port. The generated server serves static assets from `/.rstf/static/` and assembles full HTML pages with `<!DOCTYPE html>`, optional CSS link, server data injection, and bundle script tags.
 5. **Start file watcher** — watch for `.go`, `.tsx`, and `.css` changes (see `internal/watcher/watcher-spec.md`).
 
 #### Process management
 
-The Go server owns the Bun sidecar in both dev and production — same architecture, one code path. The CLI manages a single child process (`go run`), which internally starts the sidecar.
+The Go server owns the Node sidecar in both dev and production — same architecture, one code path. The CLI manages a single child process (`go run`), which internally starts the sidecar.
 
-Bun starts in milliseconds, so restarting the sidecar on Go changes has negligible cost. The slow part of a restart is `go run` recompilation, not sidecar startup.
+Node sidecar startup is fast, so restarting the sidecar on Go changes has negligible cost. The slow part of a restart is `go run` recompilation, not sidecar startup.
 
 #### File watcher behavior
 
@@ -59,7 +59,7 @@ See `internal/watcher/watcher-spec.md` for details.
 
 #### Graceful shutdown (Ctrl+C)
 
-Forwards SIGINT to the `go run` child process. The generated server handles SIGINT/SIGTERM by calling `renderer.Stop()` to terminate the Bun sidecar before exiting. This prevents orphaned sidecar processes.
+Forwards SIGINT to the `go run` child process. The generated server handles SIGINT/SIGTERM by calling `renderer.Stop()` to terminate the Node sidecar before exiting. This prevents orphaned sidecar processes.
 
 #### CLI output
 

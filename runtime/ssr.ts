@@ -1,43 +1,66 @@
-// Parse --project-root from CLI args
+import { createServer } from "node:http";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
 function parseProjectRoot(): string {
-  const args = Bun.argv;
+  const args = process.argv;
   const idx = args.indexOf("--project-root");
   if (idx === -1 || idx + 1 >= args.length) {
-    console.error("Usage: bun run ssr.ts --project-root <path>");
+    console.error("Usage: node --import tsx ssr.ts --project-root <path>");
     process.exit(1);
   }
-  return args[idx + 1];
+  return path.resolve(args[idx + 1]);
 }
 
 const projectRoot = parseProjectRoot();
+const nodeRequire = createRequire(import.meta.url);
 
 // Resolve React from the project's node_modules to ensure a single React instance.
-// The sidecar lives in the framework directory, but components live in the project
-// directory. If each resolves "react" relative to its own location, we get two copies
-// and hooks break. Using require.resolve with the project path ensures both sides
-// use the same React.
-const reactPath = require.resolve("react", { paths: [projectRoot] });
-const reactDomServerPath = require.resolve("react-dom/server", { paths: [projectRoot] });
-const { createElement, Fragment } = await import(reactPath);
-const { renderToString } = await import(reactDomServerPath);
+const reactPath = nodeRequire.resolve("react", { paths: [projectRoot] });
+const reactDomServerPath = nodeRequire.resolve("react-dom/server", {
+  paths: [projectRoot],
+});
+const { createElement } = await import(pathToFileURL(reactPath).href);
+const { renderToString } = await import(pathToFileURL(reactDomServerPath).href);
 
-// Module cache: component path -> module
 const moduleCache = new Map<string, any>();
-
-// Cache of generated modules for __setServerData calls
 const generatedModuleCache = new Map<string, any>();
+let cacheVersion = 0;
+
+function resolveComponentFile(componentPath: string): string {
+  const base = path.join(projectRoot, componentPath);
+  const candidates = [
+    `${base}.tsx`,
+    `${base}.ts`,
+    `${base}.jsx`,
+    `${base}.js`,
+    path.join(base, "index.tsx"),
+    path.join(base, "index.ts"),
+    path.join(base, "index.jsx"),
+    path.join(base, "index.js"),
+  ];
+
+  for (const filePath of candidates) {
+    if (existsSync(filePath)) {
+      return filePath;
+    }
+  }
+
+  throw new Error(`Component not found: ${componentPath}`);
+}
+
+async function importVersioned(absPath: string): Promise<any> {
+  const href = pathToFileURL(absPath).href;
+  return import(`${href}?v=${cacheVersion}`);
+}
 
 async function loadComponent(componentPath: string): Promise<Function> {
-  const fullPath = `${projectRoot}/${componentPath}`;
-
-  let mod = moduleCache.get(fullPath);
+  let mod = moduleCache.get(componentPath);
   if (!mod) {
-    try {
-      mod = await import(fullPath);
-    } catch (e: any) {
-      throw new Error(`Component not found: ${componentPath}`);
-    }
-    moduleCache.set(fullPath, mod);
+    mod = await importVersioned(resolveComponentFile(componentPath));
+    moduleCache.set(componentPath, mod);
   }
 
   if (typeof mod.View !== "function") {
@@ -47,8 +70,6 @@ async function loadComponent(componentPath: string): Promise<Function> {
   return mod.View;
 }
 
-// Resolves generated modules for all serverData keys (async phase).
-// Returns pairs of [module, data] ready for synchronous __setServerData calls.
 async function resolveGeneratedModules(
   serverData: Record<string, Record<string, any>>
 ): Promise<Array<[any, Record<string, any>]>> {
@@ -59,12 +80,12 @@ async function resolveGeneratedModules(
     entries.map(async ([componentPath, data]) => {
       let mod = generatedModuleCache.get(componentPath);
       if (!mod) {
-        const genPath = `${projectRoot}/.rstf/generated/${componentPath}.ts`;
+        const genPath = path.join(projectRoot, ".rstf", "generated", `${componentPath}.ts`);
         try {
-          mod = await import(genPath);
+          mod = await importVersioned(genPath);
           generatedModuleCache.set(componentPath, mod);
         } catch {
-          return; // No generated module — component has no .go file
+          return; // No generated module — component has no .go file.
         }
       }
       if (typeof mod.__setServerData === "function") {
@@ -82,45 +103,65 @@ interface RenderRequest {
   serverData?: Record<string, Record<string, any>>;
 }
 
-const server = Bun.serve({
-  port: 0,
-  routes: {
-    "/render": {
-      POST: async (req) => {
-        try {
-          const body = (await req.json()) as RenderRequest;
+function writeJSON(res: any, status: number, payload: unknown): void {
+  const body = JSON.stringify(payload);
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json");
+  res.end(body);
+}
 
-          // Async phase: resolve all imports before entering the synchronous block.
-          const generatedModules = body.serverData
-            ? await resolveGeneratedModules(body.serverData)
-            : [];
-          const Layout = await loadComponent(body.layout);
-          const Route = await loadComponent(body.component);
+const server = createServer(async (req, res) => {
+  const method = req.method || "";
+  const url = req.url || "";
 
-          // Synchronous phase: set data + render. No await here — cannot be
-          // interrupted by another request on the single-threaded event loop.
-          for (const [mod, data] of generatedModules) {
-            mod.__setServerData(data);
-          }
-          const html = renderToString(
-            createElement(Layout, null, createElement(Route))
-          );
+  if (method === "POST" && url === "/invalidate") {
+    moduleCache.clear();
+    generatedModuleCache.clear();
+    cacheVersion++;
+    writeJSON(res, 200, { ok: true });
+    return;
+  }
 
-          return Response.json({ html });
-        } catch (e: any) {
-          return Response.json({ error: e.message }, { status: 500 });
-        }
-      },
-    },
-    "/invalidate": {
-      POST: () => {
-        moduleCache.clear();
-        generatedModuleCache.clear();
-        return Response.json({ ok: true });
-      },
-    },
-  },
+  if (method === "POST" && url === "/render") {
+    try {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as RenderRequest;
+      const generatedModules = body.serverData
+        ? await resolveGeneratedModules(body.serverData)
+        : [];
+      const Layout = await loadComponent(body.layout);
+      const Route = await loadComponent(body.component);
+
+      // Synchronous phase: no await between data set and render.
+      for (const [mod, data] of generatedModules) {
+        mod.__setServerData(data);
+      }
+      const html = renderToString(createElement(Layout, null, createElement(Route)));
+      writeJSON(res, 200, { html });
+      return;
+    } catch (e: any) {
+      writeJSON(res, 500, { error: e?.message || String(e) });
+      return;
+    }
+  }
+
+  writeJSON(res, 404, { error: "not found" });
 });
 
-// Print port to stdout so the Go process can read it
-console.log(server.port);
+server.listen(0, "127.0.0.1", () => {
+  const addr = server.address();
+  if (!addr || typeof addr === "string") {
+    console.error("failed to bind sidecar port");
+    process.exit(1);
+  }
+  // Print port to stdout so the Go process can read it.
+  console.log(addr.port);
+});
+
+process.on("SIGINT", () => {
+  server.close(() => process.exit(0));
+});
