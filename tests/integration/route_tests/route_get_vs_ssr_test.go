@@ -1,4 +1,4 @@
-package integration_test
+package route_tests
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestRouteGetVsSSR(t *testing.T) {
-	baseURL := startRouteContractServer(t)
+	baseURL := ensureRouteContractServerRunning(t)
 
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/get-vs-ssr", nil)
 	if err != nil {

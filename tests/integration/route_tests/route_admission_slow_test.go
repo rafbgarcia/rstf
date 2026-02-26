@@ -1,4 +1,4 @@
-package integration_test
+package route_tests
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 )
 
 func TestRouteAdmissionSlow(t *testing.T) {
-	baseURL := startRouteContractServer(t)
+	baseURL := ensureRouteContractServerRunning(t)
 
 	type overloadedResponse struct {
 		status int

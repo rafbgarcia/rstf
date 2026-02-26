@@ -1,4 +1,4 @@
-package integration_test
+package route_tests
 
 import (
 	"net/http"
@@ -6,7 +6,7 @@ import (
 )
 
 func TestRouteActionsReturnNull(t *testing.T) {
-	baseURL := startRouteContractServer(t)
+	baseURL := ensureRouteContractServerRunning(t)
 
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/actions-return-null", nil)
 	if err != nil {

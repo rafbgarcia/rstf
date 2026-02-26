@@ -1,4 +1,4 @@
-package integration_test
+package route_tests
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestRouteActionsExhaustiveSupportedVerbs(t *testing.T) {
-	baseURL := startRouteContractServer(t)
+	baseURL := ensureRouteContractServerRunning(t)
 
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		req, err := http.NewRequest(method, baseURL+"/actions-exhaustive-supported-verbs", nil)

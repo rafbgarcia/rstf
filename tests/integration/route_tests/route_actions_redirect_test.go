@@ -1,4 +1,4 @@
-package integration_test
+package route_tests
 
 import (
 	"net/http"
@@ -6,7 +6,7 @@ import (
 )
 
 func TestRouteActionsRedirect(t *testing.T) {
-	baseURL := startRouteContractServer(t)
+	baseURL := ensureRouteContractServerRunning(t)
 
 	noRedirectClient := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {

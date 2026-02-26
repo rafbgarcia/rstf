@@ -1,4 +1,4 @@
-package integration_test
+package route_tests
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 )
 
 func TestRouteActionsReturnJSON(t *testing.T) {
-	baseURL := startRouteContractServer(t)
+	baseURL := ensureRouteContractServerRunning(t)
 
 	reqBody := strings.NewReader(`{"title":"hello"}`)
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/actions-return-json", reqBody)
