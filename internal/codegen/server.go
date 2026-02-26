@@ -326,14 +326,15 @@ func writeMain(
 	b.WriteString(`func main() {
 	port := flag.String("port", "3000", "HTTP server port")
 	flag.Parse()
+
+	rstfApp := rstf.NewApp()
+	defer rstfApp.Close()
 `)
 
 	if hasOnServerStart {
 		imp := aliasMap["."]
 		fmt.Fprintf(b, `
-	rstfApp := rstf.NewApp()
 	%s.OnServerStart(rstfApp)
-	defer rstfApp.Close()
 `, imp.Alias)
 	}
 
@@ -354,6 +355,11 @@ func writeMain(
 	}()
 
 	rt := router.New()
+	rt.Use(rstf.NewAdmissionMiddleware(rstf.AdmissionControlConfig{
+		MaxConcurrentRequests: rstfApp.MaxConcurrentRequests(),
+		MaxQueuedRequests:     rstfApp.MaxQueuedRequests(),
+		QueueTimeout:          rstfApp.QueueTimeout(),
+	}))
 `)
 
 	if hasAroundRequest {
@@ -404,14 +410,14 @@ func writeMain(
 			if isHTML {
 `)
 		if route.hasComponent {
-			writeHTMLRenderBlock(b, route, hasOnServerStart, hasLayoutSSR, aliasMap, deps)
+			writeHTMLRenderBlock(b, route, hasLayoutSSR, aliasMap, deps)
 		} else {
 			b.WriteString("\t\t\t\tw.WriteHeader(http.StatusNotAcceptable)\n\t\t\t\treturn\n")
 		}
 		b.WriteString(`			}
 			`)
 		if route.hasGET {
-			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "GET")
+			writeMethodCallBlock(b, route, aliasMap, "GET")
 		} else {
 			b.WriteString("w.WriteHeader(http.StatusNotAcceptable)\n\t\t\treturn\n")
 		}
@@ -420,32 +426,32 @@ func writeMain(
 			if isHTML {
 `)
 		if route.hasComponent {
-			writeHTMLRenderBlockHead(b, route, hasOnServerStart, hasLayoutSSR, aliasMap, deps)
+			writeHTMLRenderBlockHead(b, route, hasLayoutSSR, aliasMap, deps)
 		} else {
 			b.WriteString("\t\t\t\tw.WriteHeader(http.StatusNotAcceptable)\n\t\t\t\treturn\n")
 		}
 		b.WriteString(`			}
 			`)
 		if route.hasGET {
-			writeMethodCallBlockHead(b, route, hasOnServerStart, aliasMap, "GET")
+			writeMethodCallBlockHead(b, route, aliasMap, "GET")
 		} else {
 			b.WriteString("w.WriteHeader(http.StatusNotAcceptable)\n\t\t\treturn\n")
 		}
 		if route.hasPOST {
 			b.WriteString("\t\tcase http.MethodPost:\n")
-			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "POST")
+			writeMethodCallBlock(b, route, aliasMap, "POST")
 		}
 		if route.hasPUT {
 			b.WriteString("\t\tcase http.MethodPut:\n")
-			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "PUT")
+			writeMethodCallBlock(b, route, aliasMap, "PUT")
 		}
 		if route.hasPATCH {
 			b.WriteString("\t\tcase http.MethodPatch:\n")
-			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "PATCH")
+			writeMethodCallBlock(b, route, aliasMap, "PATCH")
 		}
 		if route.hasDELETE {
 			b.WriteString("\t\tcase http.MethodDelete:\n")
-			writeMethodCallBlock(b, route, hasOnServerStart, aliasMap, "DELETE")
+			writeMethodCallBlock(b, route, aliasMap, "DELETE")
 		}
 		b.WriteString(`		default:
 			methodNotAllowed(w, allowed)
@@ -463,19 +469,16 @@ func writeMain(
 func writeHTMLRenderBlock(
 	b *strings.Builder,
 	route routeEntry,
-	hasOnServerStart bool,
 	hasLayoutSSR bool,
 	aliasMap map[string]serverImport,
 	deps map[string][]string,
 ) {
 	b.WriteString("\t\t\t\tctx := rstf.NewContext(req)\n")
-	if hasOnServerStart {
-		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
-		b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
-		b.WriteString("\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
-		b.WriteString("\t\t\t\t\treturn\n")
-		b.WriteString("\t\t\t\t}\n")
-	}
+	b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+	b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
+	b.WriteString("\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
+	b.WriteString("\t\t\t\t\treturn\n")
+	b.WriteString("\t\t\t\t}\n")
 
 	b.WriteString("\t\t\t\tsd := map[string]map[string]any{}\n")
 	if hasLayoutSSR {
@@ -505,19 +508,16 @@ func writeHTMLRenderBlock(
 func writeHTMLRenderBlockHead(
 	b *strings.Builder,
 	route routeEntry,
-	hasOnServerStart bool,
 	hasLayoutSSR bool,
 	aliasMap map[string]serverImport,
 	deps map[string][]string,
 ) {
 	b.WriteString("\t\t\t\tctx := rstf.NewContext(req)\n")
-	if hasOnServerStart {
-		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
-		b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
-		b.WriteString("\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
-		b.WriteString("\t\t\t\t\treturn\n")
-		b.WriteString("\t\t\t\t}\n")
-	}
+	b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+	b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
+	b.WriteString("\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
+	b.WriteString("\t\t\t\t\treturn\n")
+	b.WriteString("\t\t\t\t}\n")
 
 	b.WriteString("\t\t\t\tsd := map[string]map[string]any{}\n")
 	if hasLayoutSSR {
@@ -547,20 +547,18 @@ func writeHTMLRenderBlockHead(
 	b.WriteString("\t\t\t\treturn\n")
 }
 
-func writeMethodCallBlock(b *strings.Builder, route routeEntry, hasOnServerStart bool, aliasMap map[string]serverImport, methodName string) {
+func writeMethodCallBlock(b *strings.Builder, route routeEntry, aliasMap map[string]serverImport, methodName string) {
 	alias := aliasMap[route.dir].Alias
 	fmt.Fprintf(b, "\t\t\t\ttracker := rstf.NewResponseTracker(w)\n")
 	fmt.Fprintf(b, "\t\t\t\tctx := rstf.NewContext(req)\n")
 	b.WriteString("\t\t\t\tctx.Writer = tracker\n")
-	if hasOnServerStart {
-		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
-		b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
-		b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")
-		b.WriteString("\t\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
-		b.WriteString("\t\t\t\t\t}\n")
-		b.WriteString("\t\t\t\t\treturn\n")
-		b.WriteString("\t\t\t\t}\n")
-	}
+	b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+	b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
+	b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")
+	b.WriteString("\t\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
+	b.WriteString("\t\t\t\t\t}\n")
+	b.WriteString("\t\t\t\t\treturn\n")
+	b.WriteString("\t\t\t\t}\n")
 	fmt.Fprintf(b, "\t\t\t\terr := %s.%s(ctx)\n", alias, methodName)
 	b.WriteString("\t\t\t\tif err != nil {\n")
 	b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")
@@ -574,20 +572,18 @@ func writeMethodCallBlock(b *strings.Builder, route routeEntry, hasOnServerStart
 	b.WriteString("\t\t\t\treturn\n")
 }
 
-func writeMethodCallBlockHead(b *strings.Builder, route routeEntry, hasOnServerStart bool, aliasMap map[string]serverImport, methodName string) {
+func writeMethodCallBlockHead(b *strings.Builder, route routeEntry, aliasMap map[string]serverImport, methodName string) {
 	alias := aliasMap[route.dir].Alias
 	fmt.Fprintf(b, "\t\t\t\ttracker := rstf.NewResponseTracker(w)\n")
 	fmt.Fprintf(b, "\t\t\t\tctx := rstf.NewContext(req)\n")
 	b.WriteString("\t\t\t\tctx.Writer = rstf.NewHeadWriter(tracker)\n")
-	if hasOnServerStart {
-		b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
-		b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
-		b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")
-		b.WriteString("\t\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
-		b.WriteString("\t\t\t\t\t}\n")
-		b.WriteString("\t\t\t\t\treturn\n")
-		b.WriteString("\t\t\t\t}\n")
-	}
+	b.WriteString("\t\t\t\tctx.DB = rstfApp.DB()\n")
+	b.WriteString("\t\t\t\tif err := ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes()); err != nil {\n")
+	b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")
+	b.WriteString("\t\t\t\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n")
+	b.WriteString("\t\t\t\t\t}\n")
+	b.WriteString("\t\t\t\t\treturn\n")
+	b.WriteString("\t\t\t\t}\n")
 	fmt.Fprintf(b, "\t\t\t\terr := %s.%s(ctx)\n", alias, methodName)
 	b.WriteString("\t\t\t\tif err != nil {\n")
 	b.WriteString("\t\t\t\t\tif !tracker.Written() {\n")

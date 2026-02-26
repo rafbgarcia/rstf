@@ -436,6 +436,7 @@ func TestGenerateServer_WithOnServerStart(t *testing.T) {
 		"rstfApp := rstf.NewApp()",
 		"app.OnServerStart(rstfApp)",
 		"defer rstfApp.Close()",
+		"rt.Use(rstf.NewAdmissionMiddleware",
 		// DB wiring in handler.
 		"ctx.DB = rstfApp.DB()",
 		"ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes())",
@@ -472,16 +473,25 @@ func TestGenerateServer_WithoutOnServerStart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Should NOT have OnServerStart-related code.
+	// Should NOT have OnServerStart call, but app/runtime defaults still wire context.
 	unwanted := []string{
-		"rstfApp",
 		"app.OnServerStart(",
-		"ctx.DB =",
-		"ctx.SetRequestBodyLimitBytes(",
 	}
 	for _, s := range unwanted {
 		if strings.Contains(got, s) {
 			t.Errorf("output should NOT contain %q when HasOnServerStart=false\n\nFull output:\n%s", s, got)
+		}
+	}
+	required := []string{
+		"rstfApp := rstf.NewApp()",
+		"defer rstfApp.Close()",
+		"rt.Use(rstf.NewAdmissionMiddleware",
+		"ctx.DB = rstfApp.DB()",
+		"ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes())",
+	}
+	for _, s := range required {
+		if !strings.Contains(got, s) {
+			t.Errorf("output missing %q when HasOnServerStart=false\n\nFull output:\n%s", s, got)
 		}
 	}
 }
@@ -551,6 +561,8 @@ func TestGenerateServer_WithAroundRequest(t *testing.T) {
 	}
 
 	expectations := []string{
+		"rstfApp := rstf.NewApp()",
+		"rt.Use(rstf.NewAdmissionMiddleware",
 		"app.AroundRequest()",
 		"rt.Use(mw)",
 	}
@@ -560,9 +572,9 @@ func TestGenerateServer_WithAroundRequest(t *testing.T) {
 		}
 	}
 
-	// Should NOT have OnServerStart code.
-	if strings.Contains(got, "rstfApp") {
-		t.Errorf("output should NOT contain rstfApp when only AroundRequest is set\n\nFull output:\n%s", got)
+	// Should NOT have OnServerStart call.
+	if strings.Contains(got, "app.OnServerStart(") {
+		t.Errorf("output should NOT contain OnServerStart call when only AroundRequest is set\n\nFull output:\n%s", got)
 	}
 }
 
@@ -597,6 +609,7 @@ func TestGenerateServer_WithBothConventions(t *testing.T) {
 		"rstfApp := rstf.NewApp()",
 		"app.OnServerStart(rstfApp)",
 		"defer rstfApp.Close()",
+		"rt.Use(rstf.NewAdmissionMiddleware",
 		"ctx.DB = rstfApp.DB()",
 		"ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes())",
 		// AroundRequest

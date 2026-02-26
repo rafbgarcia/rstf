@@ -20,6 +20,7 @@ const (
 	ErrorCodePayloadTooLarge        ErrorCode = "payload_too_large"
 	ErrorCodeUnsupportedContentType ErrorCode = "unsupported_content_type"
 	ErrorCodeValidationFailed       ErrorCode = "validation_failed"
+	ErrorCodeOverloaded             ErrorCode = "overloaded"
 	ErrorCodeInternal               ErrorCode = "internal_error"
 )
 
@@ -219,6 +220,8 @@ func mapErrorCodeToStatus(code ErrorCode) int {
 		return http.StatusUnsupportedMediaType
 	case ErrorCodeValidationFailed:
 		return http.StatusUnprocessableEntity
+	case ErrorCodeOverloaded:
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
 	}
