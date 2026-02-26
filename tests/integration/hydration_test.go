@@ -78,10 +78,9 @@ func TestHydration(t *testing.T) {
 	// Step 9: Click the counter button and verify hydration.
 	btn := page.MustElement("[data-testid=counter]")
 	btn.MustClick()
-	page.MustWaitStable()
-
-	btnText := btn.MustText()
-	assert.Equal(t, "Count: 1", btnText)
+	require.Eventually(t, func() bool {
+		return page.MustElement("[data-testid=counter]").MustText() == "Count: 1"
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 // TestCSS verifies the full CSS pipeline: PostCSS/Tailwind processing, static
