@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
+import { lstat, mkdir, symlink } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -17,17 +18,31 @@ function parseProjectRoot(): string {
 const projectRoot = parseProjectRoot();
 const nodeRequire = createRequire(import.meta.url);
 
-// Resolve React from the project's node_modules to ensure a single React instance.
-const reactPath = nodeRequire.resolve("react", { paths: [projectRoot] });
-const reactDomServerPath = nodeRequire.resolve("react-dom/server", {
-  paths: [projectRoot],
-});
-const { createElement } = await import(pathToFileURL(reactPath).href);
-const { renderToString } = await import(pathToFileURL(reactDomServerPath).href);
-
 const moduleCache = new Map<string, any>();
 const generatedModuleCache = new Map<string, any>();
 let cacheVersion = 0;
+let createElement: any;
+let renderToString: any;
+
+async function ensureRSTFAlias(): Promise<void> {
+  const scopeDir = path.join(projectRoot, "node_modules", "@rstf");
+  const target = path.join(projectRoot, ".rstf", "generated");
+
+  await mkdir(path.dirname(scopeDir), { recursive: true });
+  try {
+    const st = await lstat(scopeDir);
+    if (st.isSymbolicLink()) {
+      return;
+    }
+    return;
+  } catch {
+    // Missing alias dir; create symlink.
+  }
+
+  // Use relative target so the project remains movable.
+  const relTarget = path.relative(path.dirname(scopeDir), target);
+  await symlink(relTarget, scopeDir, "dir");
+}
 
 function resolveComponentFile(componentPath: string): string {
   const base = path.join(projectRoot, componentPath);
@@ -152,14 +167,31 @@ const server = createServer(async (req, res) => {
   writeJSON(res, 404, { error: "not found" });
 });
 
-server.listen(0, "127.0.0.1", () => {
-  const addr = server.address();
-  if (!addr || typeof addr === "string") {
-    console.error("failed to bind sidecar port");
-    process.exit(1);
-  }
-  // Print port to stdout so the Go process can read it.
-  console.log(addr.port);
+async function main(): Promise<void> {
+  await ensureRSTFAlias();
+
+  // Resolve React from the project's node_modules to ensure a single React instance.
+  const reactPath = nodeRequire.resolve("react", { paths: [projectRoot] });
+  const reactDomServerPath = nodeRequire.resolve("react-dom/server", {
+    paths: [projectRoot],
+  });
+  ({ createElement } = await import(pathToFileURL(reactPath).href));
+  ({ renderToString } = await import(pathToFileURL(reactDomServerPath).href));
+
+  server.listen(0, "127.0.0.1", () => {
+    const addr = server.address();
+    if (!addr || typeof addr === "string") {
+      console.error("failed to bind sidecar port");
+      process.exit(1);
+    }
+    // Print port to stdout so the Go process can read it.
+    console.log(addr.port);
+  });
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });
 
 process.on("SIGINT", () => {

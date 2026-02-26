@@ -27,14 +27,15 @@ func New() *Renderer {
 // Start spawns the Node sidecar process and waits for it to report its port.
 func (r *Renderer) Start(projectRoot string) error {
 	ssrPath := filepath.Join(frameworkRoot(), "runtime", "ssr.ts")
+	loaderPath := filepath.Join(frameworkRoot(), "node_modules", "tsx", "dist", "loader.mjs")
 
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return fmt.Errorf("renderer: resolve project root: %w", err)
 	}
 
-	r.cmd = exec.Command("node", "--import", "tsx", ssrPath, "--project-root", absRoot)
-	r.cmd.Dir = frameworkRoot()
+	r.cmd = exec.Command("node", "--import", loaderPath, ssrPath, "--project-root", absRoot)
+	r.cmd.Dir = absRoot
 	r.cmd.Env = append(os.Environ(), "NO_COLOR=1")
 	r.cmd.Stderr = os.Stderr
 
