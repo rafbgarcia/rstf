@@ -66,3 +66,26 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
 - Standard error envelope writer is implemented for action/API errors via `WriteErrorEnvelope`.
 - Integration test scenarios under `tests/integration/test_project/routes` now implement concrete handlers (no comment-only stubs).
 - Added focused scenario route `routes/actions-exhaustive-supported-verbs` to exercise the full supported method set in one place.
+
+## Recommended Direction (First Principles)
+- Keep admission control deterministic and explicit:
+  - run when in-flight budget is available,
+  - enqueue when queue budget is available,
+  - drop with `503` + standard envelope when saturated.
+- Treat request admission and rate limiting as separate concerns:
+  - Workfront 01 owns server admission/backpressure behavior.
+  - Rate limiting policy and keying are tracked in Workfront 11.
+- Keep v1 policy minimal and production-safe:
+  - `MaxConcurrentRequests`,
+  - `MaxQueuedRequests`,
+  - `QueueTimeout`.
+- Prefer middleware-level enforcement before handler execution.
+
+## Remaining To Finish Workfront 01
+- Add configurable request body limits wired through app config (default remains `1 MiB`).
+- Implement admission/backpressure runtime controls (`run`/`enqueue`/`drop`) and overload envelope behavior.
+- Add exhaustive contract tests for:
+  - `400`, `413`, `415`, `422` mappings,
+  - Accept negotiation edge cases and `406`,
+  - `HEAD`/`OPTIONS` framework defaults.
+- Verify integration/runtime behavior in unrestricted environment (port-binding tests).

@@ -33,3 +33,6 @@ Reason: Telemetry should instrument finalized request/data/runtime behaviors.
 
 10. [10_background_jobs_and_scheduling](/Users/rafa/github.com/rafbgarcia/rstf/docs/workfronts/10_background_jobs_and_scheduling.md)
 Reason: Async system design benefits from mature config, observability, and data contracts.
+
+11. [11_rate_limiting_and_policy](/Users/rafa/github.com/rafbgarcia/rstf/docs/workfronts/11_rate_limiting_and_policy.md)
+Reason: Fairness/abuse controls should be formalized after core request/action semantics and before broad production rollout.
