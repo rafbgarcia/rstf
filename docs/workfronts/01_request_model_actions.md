@@ -19,12 +19,12 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
 - [x] A clear handler convention for page, action, and API endpoints.
 - [x] Typed request parsing and response helpers.
 - [x] Consistent status/redirect semantics for actions.
-- [ ] Request size limits and payload validation contracts for SSR/action/API endpoints.
+- [x] Request size limits and payload validation contracts for SSR/action/API endpoints.
 - [x] Standard oversized/invalid payload error envelope and status mapping.
 
 ## Production Hardening Criteria
 
-- [ ] Define default and configurable request body size limits.
+- [x] Define default and configurable request body size limits.
 - [ ] Define backpressure/admission behavior when request queues are saturated.
 - [ ] Ensure request parsing failures are deterministic and safe for production responses (partially implemented).
 
@@ -45,7 +45,7 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
   - Users can write directly to standard Go web primitives (`http.ResponseWriter` and `*http.Request`) via context.
   - Framework response helpers are optional sugar (`JSON`, `Text`, `Redirect`, `NoContent`).
 - Body parsing and error contract defaults:
-  - Default body limit: `1 MiB` (configurable).
+  - Default body limit: `1 MiB` (configurable via `app.SetRequestBodyLimitBytes`).
   - Status mapping: `400` invalid payload, `413` payload too large, `415` unsupported content type, `422` validation failure.
   - Standard error envelope:
 
@@ -68,7 +68,7 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
   - `HEAD`: framework-provided from `GET` behavior (same status/headers, no body).
   - `OPTIONS`: framework-generated `Allow` metadata per route.
 - `rstf.Context` now includes request/response helpers:
-  - `BindJSON` (with default 1 MiB body limit),
+  - `BindJSON` (with default 1 MiB body limit; respects app-configured request body limit),
   - `JSON`, `Text`, `Redirect`, `NoContent`.
 - Standard error envelope writer is implemented for action/API errors via `WriteErrorEnvelope`.
 - Integration test scenarios under `tests/integration/test_project/routes` now implement concrete handlers (no comment-only stubs).
@@ -84,7 +84,6 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
   - standard action/API error envelope writer
   - scenario route coverage in `tests/integration/test_project/routes`
 - [ ] Missing:
-  - configurable body limit wired through app config (currently default `1 MiB` only)
   - admission/backpressure implementation (`run`/`enqueue`/`drop`)
   - full contract-test completion for all mappings and negotiation edge cases
   - unrestricted integration runtime verification (sandbox currently blocks port-binding tests)
@@ -106,7 +105,7 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
 
 ## Remaining To Finish Workfront 01
 
-- [ ] Add configurable request body limits wired through app config (default remains `1 MiB`).
+- [x] Add configurable request body limits wired through app config (default remains `1 MiB`).
 - [ ] Implement admission/backpressure runtime controls (`run`/`enqueue`/`drop`) and overload envelope behavior.
 - [ ] Add exhaustive contract tests for:
   - `400`, `413`, `415`, `422` mappings,

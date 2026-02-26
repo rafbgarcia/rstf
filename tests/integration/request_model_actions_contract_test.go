@@ -186,7 +186,7 @@ func TestRequestModelActionsContract(t *testing.T) {
 		t.Fatalf("GET /get-vs-ssr unexpected payload: %+v", getResp)
 	}
 
-	assertEnvelope := func(t *testing.T, method, path string, body io.Reader, contentType string, wantStatus int, wantCode string) {
+	assertEnvelope := func(t *testing.T, method, path string, body io.Reader, contentType string, wantStatus int, wantCode string) map[string]any {
 		t.Helper()
 		req, err := http.NewRequest(method, baseURL+path, body)
 		if err != nil {
@@ -206,7 +206,8 @@ func TestRequestModelActionsContract(t *testing.T) {
 		}
 		var env struct {
 			Error struct {
-				Code string `json:"code"`
+				Code    string         `json:"code"`
+				Details map[string]any `json:"details"`
 			} `json:"error"`
 		}
 		if err := json.Unmarshal(payload, &env); err != nil {
@@ -215,6 +216,7 @@ func TestRequestModelActionsContract(t *testing.T) {
 		if env.Error.Code != wantCode {
 			t.Fatalf("%s %s: got code=%q, want %q", method, path, env.Error.Code, wantCode)
 		}
+		return env.Error.Details
 	}
 
 	assertEnvelope(t,
@@ -235,8 +237,8 @@ func TestRequestModelActionsContract(t *testing.T) {
 		string(rstf.ErrorCodeInvalidPayload),
 	)
 
-	huge := `{"title":"` + strings.Repeat("a", int(rstf.DefaultBodyLimit)) + `"}`
-	assertEnvelope(t,
+	huge := `{"title":"` + strings.Repeat("a", 2048) + `"}`
+	details := assertEnvelope(t,
 		http.MethodPost,
 		"/actions-return-json",
 		bytes.NewBufferString(huge),
@@ -244,6 +246,9 @@ func TestRequestModelActionsContract(t *testing.T) {
 		http.StatusRequestEntityTooLarge,
 		string(rstf.ErrorCodePayloadTooLarge),
 	)
+	if got := details["limitBytes"]; got != float64(1024) {
+		t.Fatalf("POST /actions-return-json payload_too_large: got limitBytes=%v, want 1024", got)
+	}
 
 	req, err = http.NewRequest(http.MethodHead, baseURL+"/get-vs-ssr", nil)
 	if err != nil {

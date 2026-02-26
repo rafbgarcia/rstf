@@ -438,6 +438,7 @@ func TestGenerateServer_WithOnServerStart(t *testing.T) {
 		"defer rstfApp.Close()",
 		// DB wiring in handler.
 		"ctx.DB = rstfApp.DB()",
+		"ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes())",
 	}
 	for _, exp := range expectations {
 		if !strings.Contains(got, exp) {
@@ -476,6 +477,7 @@ func TestGenerateServer_WithoutOnServerStart(t *testing.T) {
 		"rstfApp",
 		"app.OnServerStart(",
 		"ctx.DB =",
+		"ctx.SetRequestBodyLimitBytes(",
 	}
 	for _, s := range unwanted {
 		if strings.Contains(got, s) {
@@ -596,6 +598,7 @@ func TestGenerateServer_WithBothConventions(t *testing.T) {
 		"app.OnServerStart(rstfApp)",
 		"defer rstfApp.Close()",
 		"ctx.DB = rstfApp.DB()",
+		"ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes())",
 		// AroundRequest
 		"app.AroundRequest()",
 		"rt.Use(mw)",

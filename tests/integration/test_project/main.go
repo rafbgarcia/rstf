@@ -11,3 +11,9 @@ func SSR(ctx *rstf.Context) ServerData {
 		AppName: "Basic Example",
 	}
 }
+
+func OnServerStart(app *rstf.App) {
+	if err := app.SetRequestBodyLimitBytes(1024); err != nil {
+		panic(err)
+	}
+}
