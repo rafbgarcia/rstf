@@ -5,6 +5,9 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAnalyzeDeps_SingleRouteNoImports(t *testing.T) {
@@ -31,13 +34,9 @@ func SSR() ServerData { return ServerData{} }
 `)
 
 	got, err := AnalyzeDeps(root, "routes/dashboard/index.tsx", nil)
-	if err != nil {
-		t.Fatalf("AnalyzeDeps: %v", err)
-	}
+	require.NoError(t, err)
 	want := []string{"routes/dashboard"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "got %v, want %v", got, want)
 }
 
 func TestAnalyzeDeps_SharedComponentWithGo(t *testing.T) {
@@ -71,13 +70,9 @@ func SSR() ServerData { return ServerData{} }
 `)
 
 	got, err := AnalyzeDeps(root, "routes/dashboard/index.tsx", nil)
-	if err != nil {
-		t.Fatalf("AnalyzeDeps: %v", err)
-	}
+	require.NoError(t, err)
 	want := []string{"routes/dashboard", "shared/ui/user-avatar"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "got %v, want %v", got, want)
 }
 
 func TestAnalyzeDeps_SharedComponentWithoutGo(t *testing.T) {
@@ -102,13 +97,9 @@ export function Button({ children }) { return <button>{children}</button>; }
 `)
 
 	got, err := AnalyzeDeps(root, "routes/dashboard/index.tsx", nil)
-	if err != nil {
-		t.Fatalf("AnalyzeDeps: %v", err)
-	}
+	require.NoError(t, err)
 	want := []string{"routes/dashboard"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "got %v, want %v", got, want)
 }
 
 func TestAnalyzeDeps_TransitiveImports(t *testing.T) {
@@ -142,13 +133,9 @@ func SSR() ServerData { return ServerData{} }
 `)
 
 	got, err := AnalyzeDeps(root, "routes/page/index.tsx", nil)
-	if err != nil {
-		t.Fatalf("AnalyzeDeps: %v", err)
-	}
+	require.NoError(t, err)
 	want := []string{"routes/page", "shared/deep"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "got %v, want %v", got, want)
 }
 
 func TestAnalyzeDeps_CycleDetection(t *testing.T) {
@@ -171,13 +158,9 @@ export function Other() { return <View />; }
 `)
 
 	got, err := AnalyzeDeps(root, "routes/cycle/index.tsx", nil)
-	if err != nil {
-		t.Fatalf("AnalyzeDeps: %v", err)
-	}
+	require.NoError(t, err)
 	want := []string{"routes/cycle"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "got %v, want %v", got, want)
 }
 
 func TestAnalyzeDeps_BareSpecifiersSkipped(t *testing.T) {
@@ -197,13 +180,9 @@ func SSR() ServerData { return ServerData{} }
 `)
 
 	got, err := AnalyzeDeps(root, "routes/page/index.tsx", nil)
-	if err != nil {
-		t.Fatalf("AnalyzeDeps: %v", err)
-	}
+	require.NoError(t, err)
 	want := []string{"routes/page"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "got %v, want %v", got, want)
 }
 
 func TestAnalyzeDeps_RouteWithoutGoFile(t *testing.T) {
@@ -215,12 +194,8 @@ export function View() { return <div>About</div>; }
 `)
 
 	got, err := AnalyzeDeps(root, "routes/about/index.tsx", nil)
-	if err != nil {
-		t.Fatalf("AnalyzeDeps: %v", err)
-	}
-	if len(got) != 0 {
-		t.Errorf("expected empty deps, got %v", got)
-	}
+	require.NoError(t, err)
+	assert.Len(t, got, 0, "expected empty deps, got %v", got)
 }
 
 func TestAnalyzeDeps_IndexTsxResolution(t *testing.T) {
@@ -243,13 +218,9 @@ func SSR() ServerData { return ServerData{} }
 `)
 
 	got, err := AnalyzeDeps(root, "routes/page/index.tsx", nil)
-	if err != nil {
-		t.Fatalf("AnalyzeDeps: %v", err)
-	}
+	require.NoError(t, err)
 	want := []string{"shared/card"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "got %v, want %v", got, want)
 }
 
 func TestExtractLocalImports(t *testing.T) {
@@ -269,9 +240,7 @@ import { helper } from "../utils/helper";
 		"../utils/helper",
 		"./Button",
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "got %v, want %v", got, want)
 }
 
 func TestResolveImportPath(t *testing.T) {
@@ -285,22 +254,18 @@ func TestResolveImportPath(t *testing.T) {
 		specifier string
 		wantBase  string // expected filename (basename), "" if not found
 	}{
-		{"./button", "button.tsx"},           // direct .tsx
-		{"./card", "index.tsx"},              // directory index.tsx
-		{"./nonexistent", ""},                // not found
+		{"./button", "button.tsx"}, // direct .tsx
+		{"./card", "index.tsx"},    // directory index.tsx
+		{"./nonexistent", ""},      // not found
 	}
 
 	for _, tt := range tests {
 		got := resolveImportPath(root, tt.specifier)
 		if tt.wantBase == "" {
-			if got != "" {
-				t.Errorf("resolveImportPath(%q) = %q, want empty", tt.specifier, got)
-			}
+			assert.Equal(t, "", got, "resolveImportPath(%q)", tt.specifier)
 			continue
 		}
-		if filepath.Base(got) != tt.wantBase {
-			t.Errorf("resolveImportPath(%q) = %q, want basename %q", tt.specifier, got, tt.wantBase)
-		}
+		assert.Equal(t, tt.wantBase, filepath.Base(got), "resolveImportPath(%q)", tt.specifier)
 	}
 }
 
@@ -313,10 +278,6 @@ func TestDirHasGoFile(t *testing.T) {
 	withoutGo := filepath.Join(root, "without-go")
 	writeFile(t, filepath.Join(withoutGo, "index.tsx"), `export function View() {}`)
 
-	if !dirHasGoFile(withGo) {
-		t.Error("expected dirHasGoFile=true for directory with .go file")
-	}
-	if dirHasGoFile(withoutGo) {
-		t.Error("expected dirHasGoFile=false for directory without .go file")
-	}
+	assert.True(t, dirHasGoFile(withGo), "expected dirHasGoFile=true for directory with .go file")
+	assert.False(t, dirHasGoFile(withoutGo), "expected dirHasGoFile=false for directory without .go file")
 }

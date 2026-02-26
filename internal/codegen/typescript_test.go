@@ -1,8 +1,9 @@
 package codegen
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateDTS_Dashboard(t *testing.T) {
@@ -57,9 +58,7 @@ func TestGenerateDTS_Dashboard(t *testing.T) {
 	}
 
 	for _, exp := range expectations {
-		if !strings.Contains(got, exp) {
-			t.Errorf("output missing %q\n\nFull output:\n%s", exp, got)
-		}
+		assert.Contains(t, got, exp, "output missing %q\n\nFull output:\n%s", exp, got)
 	}
 }
 
@@ -108,9 +107,7 @@ func TestGenerateDTS_PrimitiveTypes(t *testing.T) {
 	}
 
 	for _, exp := range expectations {
-		if !strings.Contains(got, exp) {
-			t.Errorf("output missing %q\n\nFull output:\n%s", exp, got)
-		}
+		assert.Contains(t, got, exp, "output missing %q\n\nFull output:\n%s", exp, got)
 	}
 }
 
@@ -136,9 +133,7 @@ func TestGenerateDTS_NestedRoute(t *testing.T) {
 
 	got := GenerateDTS(rf)
 
-	if !strings.Contains(got, "declare namespace UsersProfile {") {
-		t.Errorf("expected namespace UsersProfile, got:\n%s", got)
-	}
+	assert.Contains(t, got, "declare namespace UsersProfile {", "expected namespace UsersProfile, got:\n%s", got)
 }
 
 func TestGenerateRuntimeModule(t *testing.T) {
@@ -175,9 +170,7 @@ func TestGenerateRuntimeModule(t *testing.T) {
 	}
 
 	for _, exp := range expectations {
-		if !strings.Contains(got, exp) {
-			t.Errorf("output missing %q\n\nFull output:\n%s", exp, got)
-		}
+		assert.Contains(t, got, exp, "output missing %q\n\nFull output:\n%s", exp, got)
 	}
 }
 
@@ -209,9 +202,7 @@ func TestGenerateRuntimeModule_Layout(t *testing.T) {
 	}
 
 	for _, exp := range expectations {
-		if !strings.Contains(got, exp) {
-			t.Errorf("output missing %q\n\nFull output:\n%s", exp, got)
-		}
+		assert.Contains(t, got, exp, "output missing %q\n\nFull output:\n%s", exp, got)
 	}
 }
 
@@ -230,8 +221,6 @@ func TestNamespace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := Namespace(tt.dir)
-		if got != tt.want {
-			t.Errorf("Namespace(%q) = %q, want %q", tt.dir, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got, "Namespace(%q)", tt.dir)
 	}
 }

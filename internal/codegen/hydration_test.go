@@ -1,8 +1,9 @@
 package codegen
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateHydrationEntry_Dashboard(t *testing.T) {
@@ -19,9 +20,7 @@ func TestGenerateHydrationEntry_Dashboard(t *testing.T) {
 	}
 
 	for _, exp := range expectations {
-		if !strings.Contains(got, exp) {
-			t.Errorf("output missing %q\n\nFull output:\n%s", exp, got)
-		}
+		assert.Contains(t, got, exp, "output missing %q\n\nFull output:\n%s", exp, got)
 	}
 }
 
@@ -34,9 +33,7 @@ func TestGenerateHydrationEntry_WithSharedDeps(t *testing.T) {
 	}
 
 	for _, exp := range expectations {
-		if !strings.Contains(got, exp) {
-			t.Errorf("output missing %q\n\nFull output:\n%s", exp, got)
-		}
+		assert.Contains(t, got, exp, "output missing %q\n\nFull output:\n%s", exp, got)
 	}
 }
 
@@ -51,17 +48,13 @@ func TestEntryName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := entryName(tt.routeDir)
-		if got != tt.want {
-			t.Errorf("entryName(%q) = %q, want %q", tt.routeDir, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got, "entryName(%q)", tt.routeDir)
 	}
 }
 
 func TestEntryFileName(t *testing.T) {
 	got := entryFileName("routes/dashboard")
-	if got != "dashboard.entry.tsx" {
-		t.Errorf("entryFileName = %q, want %q", got, "dashboard.entry.tsx")
-	}
+	assert.Equal(t, "dashboard.entry.tsx", got, "entryFileName")
 }
 
 func TestBundlePath(t *testing.T) {
@@ -74,8 +67,6 @@ func TestBundlePath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := bundlePath(tt.routeDir)
-		if got != tt.want {
-			t.Errorf("bundlePath(%q) = %q, want %q", tt.routeDir, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got, "bundlePath(%q)", tt.routeDir)
 	}
 }

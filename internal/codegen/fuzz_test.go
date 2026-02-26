@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"unicode"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // sanitizeIdent produces a valid exported Go identifier from fuzzed input.
@@ -42,29 +45,23 @@ func FuzzGoTypeToTS(f *testing.F) {
 	f.Fuzz(func(t *testing.T, goType string, isSlice bool) {
 		ts := goTypeToTS(goType, isSlice)
 
-		if isSlice && goType != "" && !strings.HasSuffix(ts, "[]") {
-			t.Errorf("goTypeToTS(%q, true) = %q, missing [] suffix", goType, ts)
+		if isSlice && goType != "" {
+			assert.True(t, strings.HasSuffix(ts, "[]"), "goTypeToTS(%q, true) = %q, missing [] suffix", goType, ts)
 		}
-		if !isSlice && strings.HasSuffix(ts, "[]") {
-			t.Errorf("goTypeToTS(%q, false) = %q, unexpected [] suffix", goType, ts)
+		if !isSlice {
+			assert.False(t, strings.HasSuffix(ts, "[]"), "goTypeToTS(%q, false) = %q, unexpected [] suffix", goType, ts)
 		}
 
 		// Known Go primitives must map to correct TS primitives.
 		switch goType {
 		case "string":
-			if !strings.HasPrefix(ts, "string") {
-				t.Errorf("goTypeToTS(%q, %v) = %q, want string prefix", goType, isSlice, ts)
-			}
+			assert.True(t, strings.HasPrefix(ts, "string"), "goTypeToTS(%q, %v) = %q, want string prefix", goType, isSlice, ts)
 		case "int", "int8", "int16", "int32", "int64",
 			"uint", "uint8", "uint16", "uint32", "uint64",
 			"float32", "float64":
-			if !strings.HasPrefix(ts, "number") {
-				t.Errorf("goTypeToTS(%q, %v) = %q, want number prefix", goType, isSlice, ts)
-			}
+			assert.True(t, strings.HasPrefix(ts, "number"), "goTypeToTS(%q, %v) = %q, want number prefix", goType, isSlice, ts)
 		case "bool":
-			if !strings.HasPrefix(ts, "boolean") {
-				t.Errorf("goTypeToTS(%q, %v) = %q, want boolean prefix", goType, isSlice, ts)
-			}
+			assert.True(t, strings.HasPrefix(ts, "boolean"), "goTypeToTS(%q, %v) = %q, want boolean prefix", goType, isSlice, ts)
 		}
 	})
 }
@@ -83,21 +80,15 @@ func FuzzNamespace(f *testing.F) {
 	f.Fuzz(func(t *testing.T, dir string) {
 		ns := Namespace(dir)
 
-		if dir == "." && ns != "Main" {
-			t.Errorf("Namespace(\".\") = %q, want \"Main\"", ns)
+		if dir == "." {
+			assert.Equal(t, "Main", ns, "Namespace(\".\")")
 		}
-		if strings.Contains(ns, "/") {
-			t.Errorf("Namespace(%q) = %q contains /", dir, ns)
-		}
-		if strings.Contains(ns, "-") {
-			t.Errorf("Namespace(%q) = %q contains -", dir, ns)
-		}
+		assert.NotContains(t, ns, "/", "Namespace(%q) = %q contains /", dir, ns)
+		assert.NotContains(t, ns, "-", "Namespace(%q) = %q contains -", dir, ns)
 		// Namespace is used as a TypeScript identifier. It must only contain
 		// characters valid in JS/TS identifiers.
 		for _, r := range ns {
-			if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '$' {
-				t.Errorf("Namespace(%q) = %q contains invalid identifier char %q", dir, ns, string(r))
-			}
+			assert.True(t, unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '$', "Namespace(%q) = %q contains invalid identifier char %q", dir, ns, string(r))
 		}
 	})
 }
@@ -124,15 +115,9 @@ func FuzzJsonTagName(f *testing.F) {
 
 		name := jsonTagName(field)
 
-		if strings.Contains(name, "\"") {
-			t.Errorf("jsonTagName returned %q containing quote", name)
-		}
-		if strings.Contains(name, "`") {
-			t.Errorf("jsonTagName returned %q containing backtick", name)
-		}
-		if strings.Contains(name, ",") {
-			t.Errorf("jsonTagName returned %q containing comma (options not stripped)", name)
-		}
+		assert.NotContains(t, name, "\"", "jsonTagName returned %q containing quote", name)
+		assert.NotContains(t, name, "`", "jsonTagName returned %q containing backtick", name)
+		assert.NotContains(t, name, ",", "jsonTagName returned %q containing comma (options not stripped)", name)
 	})
 }
 
@@ -153,9 +138,7 @@ import { helper } from "../utils/helper";
 	f.Fuzz(func(t *testing.T, content []byte) {
 		specifiers := extractLocalImports(content)
 		for _, s := range specifiers {
-			if !strings.HasPrefix(s, "./") && !strings.HasPrefix(s, "../") {
-				t.Errorf("specifier %q does not start with ./ or ../", s)
-			}
+			assert.True(t, strings.HasPrefix(s, "./") || strings.HasPrefix(s, "../"), "specifier %q does not start with ./ or ../", s)
 		}
 	})
 }
@@ -191,23 +174,18 @@ func FuzzGenerateDTS(f *testing.F) {
 
 		dts := GenerateDTS(rf)
 
-		if !strings.Contains(dts, "declare namespace ") {
-			t.Error("GenerateDTS output missing 'declare namespace'")
-		}
-		if strings.Count(dts, "{") != strings.Count(dts, "}") {
-			t.Errorf("unbalanced braces: %d '{' vs %d '}'",
-				strings.Count(dts, "{"), strings.Count(dts, "}"))
-		}
+		assert.Contains(t, dts, "declare namespace ", "GenerateDTS output missing 'declare namespace'")
+		assert.Equal(t, strings.Count(dts, "{"), strings.Count(dts, "}"), "unbalanced braces: %d '{' vs %d '}'", strings.Count(dts, "{"), strings.Count(dts, "}"))
 
 		ns := Namespace(rf.Dir)
-		if ns != "" && !strings.Contains(dts, "declare namespace "+ns) {
-			t.Errorf("missing namespace %q in output", ns)
+		if ns != "" {
+			assert.Contains(t, dts, "declare namespace "+ns, "missing namespace %q in output", ns)
 		}
 
 		// Every struct should produce an interface declaration.
 		for _, s := range rf.Structs {
-			if s.Name != "" && !strings.Contains(dts, "interface "+s.Name) {
-				t.Errorf("missing interface for struct %q", s.Name)
+			if s.Name != "" {
+				assert.Contains(t, dts, "interface "+s.Name, "missing interface for struct %q", s.Name)
 			}
 		}
 	})
@@ -235,20 +213,11 @@ func FuzzGenerateRuntimeModule(f *testing.F) {
 			return
 		}
 
-		if !strings.Contains(rtmod, "export function serverData()") {
-			t.Error("missing serverData export")
-		}
-		if !strings.Contains(rtmod, "__setServerData") {
-			t.Error("missing __setServerData")
-		}
-		if strings.Count(rtmod, "{") != strings.Count(rtmod, "}") {
-			t.Errorf("unbalanced braces: %d '{' vs %d '}'",
-				strings.Count(rtmod, "{"), strings.Count(rtmod, "}"))
-		}
+		assert.Contains(t, rtmod, "export function serverData()", "missing serverData export")
+		assert.Contains(t, rtmod, "__setServerData", "missing __setServerData")
+		assert.Equal(t, strings.Count(rtmod, "{"), strings.Count(rtmod, "}"), "unbalanced braces: %d '{' vs %d '}'", strings.Count(rtmod, "{"), strings.Count(rtmod, "}"))
 		// componentPath is used as the window lookup key.
-		if !strings.Contains(rtmod, componentPath) {
-			t.Errorf("componentPath %q not found in output", componentPath)
-		}
+		assert.Contains(t, rtmod, componentPath, "componentPath %q not found in output", componentPath)
 	})
 }
 
@@ -290,12 +259,8 @@ func FuzzParseAndGenerate(f *testing.F) {
 
 		dir := t.TempDir()
 		pkg := filepath.Join(dir, "route")
-		if err := os.MkdirAll(pkg, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(pkg, "route.go"), []byte(src), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(pkg, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(pkg, "route.go"), []byte(src), 0o644))
 
 		routes, err := ParseDir(dir)
 		if err != nil {
@@ -304,41 +269,25 @@ func FuzzParseAndGenerate(f *testing.F) {
 
 		for _, rf := range routes {
 			for _, fn := range rf.Funcs {
-				if fn.Name != "SSR" {
-					t.Errorf("unexpected func name %q", fn.Name)
-				}
-				if fn.ReturnType != structName {
-					t.Errorf("ReturnType = %q, want %q", fn.ReturnType, structName)
-				}
+				assert.Equal(t, "SSR", fn.Name, "unexpected func name %q", fn.Name)
+				assert.Equal(t, structName, fn.ReturnType, "ReturnType = %q, want %q", fn.ReturnType, structName)
 			}
 			for _, sd := range rf.Structs {
 				for _, field := range sd.Fields {
-					if field.JSONName == "" {
-						t.Errorf("empty JSONName in struct %s", sd.Name)
-					}
-					if field.Type == "" {
-						t.Errorf("empty Type in struct %s", sd.Name)
-					}
-					if strings.Contains(field.JSONName, "\"") {
-						t.Errorf("JSONName %q contains quote", field.JSONName)
-					}
+					assert.NotEmpty(t, field.JSONName, "empty JSONName in struct %s", sd.Name)
+					assert.NotEmpty(t, field.Type, "empty Type in struct %s", sd.Name)
+					assert.NotContains(t, field.JSONName, "\"", "JSONName %q contains quote", field.JSONName)
 				}
 			}
 
 			// End-to-end through generators.
 			dts := GenerateDTS(rf)
-			if !strings.Contains(dts, "declare namespace ") {
-				t.Error("GenerateDTS missing 'declare namespace'")
-			}
-			if strings.Count(dts, "{") != strings.Count(dts, "}") {
-				t.Errorf("unbalanced braces in DTS")
-			}
+			assert.Contains(t, dts, "declare namespace ", "GenerateDTS missing 'declare namespace'")
+			assert.Equal(t, strings.Count(dts, "{"), strings.Count(dts, "}"), "unbalanced braces in DTS")
 
 			rtmod := GenerateRuntimeModule(rf, rf.Dir)
 			if rtmod != "" {
-				if !strings.Contains(rtmod, "export function serverData()") {
-					t.Error("missing serverData export")
-				}
+				assert.Contains(t, rtmod, "export function serverData()", "missing serverData export")
 			}
 		}
 	})

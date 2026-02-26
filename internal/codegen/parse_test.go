@@ -6,6 +6,9 @@ import (
 	"runtime"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testdataDir() string {
@@ -15,69 +18,41 @@ func testdataDir() string {
 
 func TestParseDir(t *testing.T) {
 	routes, err := ParseDir(testdataDir())
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Sort for deterministic order.
 	sort.Slice(routes, func(i, j int) bool {
 		return routes[i].Dir < routes[j].Dir
 	})
 
-	if len(routes) != 2 {
-		t.Fatalf("expected 2 route dirs, got %d", len(routes))
-	}
+	require.Len(t, routes, 2)
 
 	t.Run("dashboard route", func(t *testing.T) {
 		rf := routes[0]
-		if rf.Dir != "dashboard" {
-			t.Errorf("expected dir=dashboard, got %s", rf.Dir)
-		}
-		if rf.Package != "dashboard" {
-			t.Errorf("expected package=dashboard, got %s", rf.Package)
-		}
-		if len(rf.Funcs) != 1 {
-			t.Fatalf("expected 1 func, got %d", len(rf.Funcs))
-		}
+		assert.Equal(t, "dashboard", rf.Dir)
+		assert.Equal(t, "dashboard", rf.Package)
+		require.Len(t, rf.Funcs, 1)
 
 		fn := rf.Funcs[0]
-		if fn.Name != "SSR" {
-			t.Errorf("expected func name=SSR, got %s", fn.Name)
-		}
-		if !fn.HasContext {
-			t.Error("expected HasContext=true")
-		}
-		if fn.ReturnType != "ServerData" {
-			t.Errorf("expected ReturnType=ServerData, got %s", fn.ReturnType)
-		}
+		assert.Equal(t, "SSR", fn.Name)
+		assert.True(t, fn.HasContext, "expected HasContext=true")
+		assert.Equal(t, "ServerData", fn.ReturnType)
 
 		// Structs: ServerData, Post, and Author (transitive)
-		if len(rf.Structs) != 3 {
-			t.Fatalf("expected 3 structs, got %d", len(rf.Structs))
-		}
+		assert.Len(t, rf.Structs, 3)
 	})
 
 	t.Run("settings route", func(t *testing.T) {
 		rf := routes[1]
-		if rf.Dir != "settings" {
-			t.Errorf("expected dir=settings, got %s", rf.Dir)
-		}
-		if len(rf.Funcs) != 1 {
-			t.Fatalf("expected 1 func, got %d", len(rf.Funcs))
-		}
+		assert.Equal(t, "settings", rf.Dir)
+		require.Len(t, rf.Funcs, 1)
 
 		fn := rf.Funcs[0]
-		if !fn.HasContext {
-			t.Error("expected HasContext=true")
-		}
-		if fn.ReturnType != "ServerData" {
-			t.Errorf("expected ReturnType=ServerData, got %s", fn.ReturnType)
-		}
+		assert.True(t, fn.HasContext, "expected HasContext=true")
+		assert.Equal(t, "ServerData", fn.ReturnType)
 
 		// Structs: ServerData and Config (transitive)
-		if len(rf.Structs) != 2 {
-			t.Fatalf("expected 2 structs, got %d", len(rf.Structs))
-		}
+		assert.Len(t, rf.Structs, 2)
 	})
 }
 
@@ -100,17 +75,13 @@ func TestGoTypeToTS(t *testing.T) {
 
 	for _, tt := range tests {
 		got := goTypeToTS(tt.goType, tt.isSlice)
-		if got != tt.want {
-			t.Errorf("goTypeToTS(%q, %v) = %q, want %q", tt.goType, tt.isSlice, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got, "goTypeToTS(%q, %v)", tt.goType, tt.isSlice)
 	}
 }
 
 func TestJsonTagName(t *testing.T) {
 	routes, err := ParseDir(testdataDir())
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
+	require.NoError(t, err)
 
 	var dashboard *RouteFile
 	for i := range routes {
@@ -119,9 +90,7 @@ func TestJsonTagName(t *testing.T) {
 			break
 		}
 	}
-	if dashboard == nil {
-		t.Fatal("dashboard route not found")
-	}
+	require.NotNil(t, dashboard, "dashboard route not found")
 
 	var post *StructDef
 	for i := range dashboard.Structs {
@@ -130,19 +99,11 @@ func TestJsonTagName(t *testing.T) {
 			break
 		}
 	}
-	if post == nil {
-		t.Fatal("Post struct not found")
-	}
+	require.NotNil(t, post, "Post struct not found")
 
-	if len(post.Fields) != 2 {
-		t.Fatalf("expected 2 fields, got %d", len(post.Fields))
-	}
-	if post.Fields[0].JSONName != "title" {
-		t.Errorf("field 0 jsonName: got %q, want %q", post.Fields[0].JSONName, "title")
-	}
-	if post.Fields[1].JSONName != "published" {
-		t.Errorf("field 1 jsonName: got %q, want %q", post.Fields[1].JSONName, "published")
-	}
+	require.Len(t, post.Fields, 2)
+	assert.Equal(t, "title", post.Fields[0].JSONName)
+	assert.Equal(t, "published", post.Fields[1].JSONName)
 }
 
 func TestParseDirSkipsNonRouteFiles(t *testing.T) {
@@ -156,12 +117,8 @@ func DoSomething() string {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 0 {
-		t.Errorf("expected 0 routes, got %d", len(routes))
-	}
+	require.NoError(t, err)
+	assert.Len(t, routes, 0)
 }
 
 func TestParseDirNoContext(t *testing.T) {
@@ -183,19 +140,12 @@ func SSR() ServerData {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route, got %d", len(routes))
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	require.NotEmpty(t, routes[0].Funcs)
 	fn := routes[0].Funcs[0]
-	if fn.HasContext {
-		t.Error("expected HasContext=false for function without context param")
-	}
-	if fn.ReturnType != "ServerData" {
-		t.Errorf("expected ReturnType=ServerData, got %s", fn.ReturnType)
-	}
+	assert.False(t, fn.HasContext, "expected HasContext=false for function without context param")
+	assert.Equal(t, "ServerData", fn.ReturnType)
 }
 
 func TestParseDirDetectsOnServerStart(t *testing.T) {
@@ -218,15 +168,9 @@ func SSR(ctx *rstf.Context) Session {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route, got %d", len(routes))
-	}
-	if !routes[0].HasOnServerStart {
-		t.Error("expected HasOnServerStart=true when OnServerStart(*rstf.App) is exported")
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.True(t, routes[0].HasOnServerStart, "expected HasOnServerStart=true when OnServerStart(*rstf.App) is exported")
 }
 
 func TestParseDirOnServerStartWithAlias(t *testing.T) {
@@ -249,15 +193,9 @@ func SSR(ctx *fw.Context) Session {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route, got %d", len(routes))
-	}
-	if !routes[0].HasOnServerStart {
-		t.Error("expected HasOnServerStart=true with aliased import")
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.True(t, routes[0].HasOnServerStart, "expected HasOnServerStart=true with aliased import")
 }
 
 func TestParseDirOnServerStartWrongSignature(t *testing.T) {
@@ -280,15 +218,9 @@ func SSR() Session {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route, got %d", len(routes))
-	}
-	if routes[0].HasOnServerStart {
-		t.Error("expected HasOnServerStart=false for OnServerStart() with wrong signature")
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.False(t, routes[0].HasOnServerStart, "expected HasOnServerStart=false for OnServerStart() with wrong signature")
 }
 
 func TestParseDirNoOnServerStart(t *testing.T) {
@@ -308,15 +240,9 @@ func SSR(ctx *rstf.Context) Session {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route, got %d", len(routes))
-	}
-	if routes[0].HasOnServerStart {
-		t.Error("expected HasOnServerStart=false when no OnServerStart function exists")
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.False(t, routes[0].HasOnServerStart, "expected HasOnServerStart=false when no OnServerStart function exists")
 }
 
 func TestParseDirOnServerStartOnlyNoSSR(t *testing.T) {
@@ -333,18 +259,10 @@ func OnServerStart(app *rstf.App) {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route (OnServerStart-only), got %d", len(routes))
-	}
-	if !routes[0].HasOnServerStart {
-		t.Error("expected HasOnServerStart=true")
-	}
-	if len(routes[0].Funcs) != 0 {
-		t.Errorf("expected 0 route funcs, got %d", len(routes[0].Funcs))
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.True(t, routes[0].HasOnServerStart, "expected HasOnServerStart=true")
+	assert.Len(t, routes[0].Funcs, 0)
 }
 
 func TestParseDirDetectsAroundRequest(t *testing.T) {
@@ -368,15 +286,9 @@ func SSR(ctx *rstf.Context) Session {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route, got %d", len(routes))
-	}
-	if !routes[0].HasAroundRequest {
-		t.Error("expected HasAroundRequest=true when AroundRequest() []rstf.Middleware is exported")
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.True(t, routes[0].HasAroundRequest, "expected HasAroundRequest=true when AroundRequest() []rstf.Middleware is exported")
 }
 
 func TestParseDirAroundRequestWithAlias(t *testing.T) {
@@ -400,15 +312,9 @@ func SSR(ctx *fw.Context) Session {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route, got %d", len(routes))
-	}
-	if !routes[0].HasAroundRequest {
-		t.Error("expected HasAroundRequest=true with aliased import")
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.True(t, routes[0].HasAroundRequest, "expected HasAroundRequest=true with aliased import")
 }
 
 func TestParseDirAroundRequestWrongSignature(t *testing.T) {
@@ -434,15 +340,9 @@ func SSR() Session {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route, got %d", len(routes))
-	}
-	if routes[0].HasAroundRequest {
-		t.Error("expected HasAroundRequest=false for AroundRequest with wrong signature")
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.False(t, routes[0].HasAroundRequest, "expected HasAroundRequest=false for AroundRequest with wrong signature")
 }
 
 func TestParseDirAroundRequestOnlyNoSSR(t *testing.T) {
@@ -459,18 +359,10 @@ func AroundRequest() []rstf.Middleware {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route (AroundRequest-only), got %d", len(routes))
-	}
-	if !routes[0].HasAroundRequest {
-		t.Error("expected HasAroundRequest=true")
-	}
-	if len(routes[0].Funcs) != 0 {
-		t.Errorf("expected 0 route funcs, got %d", len(routes[0].Funcs))
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.True(t, routes[0].HasAroundRequest, "expected HasAroundRequest=true")
+	assert.Len(t, routes[0].Funcs, 0)
 }
 
 func TestParseDirBothConventions(t *testing.T) {
@@ -497,21 +389,11 @@ func SSR(ctx *rstf.Context) Session {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
-	if len(routes) != 1 {
-		t.Fatalf("expected 1 route, got %d", len(routes))
-	}
-	if !routes[0].HasOnServerStart {
-		t.Error("expected HasOnServerStart=true")
-	}
-	if !routes[0].HasAroundRequest {
-		t.Error("expected HasAroundRequest=true")
-	}
-	if len(routes[0].Funcs) != 1 {
-		t.Errorf("expected 1 route func (SSR), got %d", len(routes[0].Funcs))
-	}
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	assert.True(t, routes[0].HasOnServerStart, "expected HasOnServerStart=true")
+	assert.True(t, routes[0].HasAroundRequest, "expected HasAroundRequest=true")
+	assert.Len(t, routes[0].Funcs, 1)
 }
 
 func TestParseDirSkipsNonStructReturns(t *testing.T) {
@@ -525,23 +407,15 @@ func SSR() string {
 `)
 
 	routes, err := ParseDir(dir)
-	if err != nil {
-		t.Fatalf("ParseDir: %v", err)
-	}
+	require.NoError(t, err)
 	// SSR() returns a primitive — should be skipped.
-	if len(routes) != 0 {
-		t.Errorf("expected 0 routes (primitive return), got %d", len(routes))
-	}
+	assert.Len(t, routes, 0)
 }
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	err := os.MkdirAll(filepath.Dir(path), 0o755)
-	if err != nil {
-		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
-	}
+	require.NoError(t, err, "mkdir %s", filepath.Dir(path))
 	err = os.WriteFile(path, []byte(content), 0o644)
-	if err != nil {
-		t.Fatalf("writing %s: %v", path, err)
-	}
+	require.NoError(t, err, "writing %s", path)
 }
