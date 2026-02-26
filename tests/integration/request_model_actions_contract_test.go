@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -250,6 +251,43 @@ func TestRequestModelActionsContract(t *testing.T) {
 		t.Fatalf("POST /actions-return-json payload_too_large: got limitBytes=%v, want 1024", got)
 	}
 
+	assertEnvelope(t,
+		http.MethodPost,
+		"/actions-return-json",
+		strings.NewReader(`{"title":""}`),
+		"application/json",
+		http.StatusUnprocessableEntity,
+		string(rstf.ErrorCodeValidationFailed),
+	)
+
+	req, err = http.NewRequest(http.MethodGet, baseURL+"/actions-exhaustive-supported-verbs", nil)
+	if err != nil {
+		t.Fatalf("new request (GET /actions-exhaustive-supported-verbs html): %v", err)
+	}
+	req.Header.Set("Accept", "text/html")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /actions-exhaustive-supported-verbs (html): %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotAcceptable {
+		t.Fatalf("GET /actions-exhaustive-supported-verbs (html): got %d, want 406", resp.StatusCode)
+	}
+
+	req, err = http.NewRequest(http.MethodGet, baseURL+"/actions-return-null", nil)
+	if err != nil {
+		t.Fatalf("new request (GET /actions-return-null json): %v", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /actions-return-null (json): %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotAcceptable {
+		t.Fatalf("GET /actions-return-null (json): got %d, want 406", resp.StatusCode)
+	}
+
 	req, err = http.NewRequest(http.MethodHead, baseURL+"/get-vs-ssr", nil)
 	if err != nil {
 		t.Fatalf("new request (HEAD /get-vs-ssr): %v", err)
@@ -285,5 +323,95 @@ func TestRequestModelActionsContract(t *testing.T) {
 		if !strings.Contains(allow, method) {
 			t.Fatalf("OPTIONS /actions-exhaustive-supported-verbs: Allow header missing %q (got %q)", method, allow)
 		}
+	}
+
+	type overloadedResponse struct {
+		status int
+		code   string
+		reason string
+	}
+	results := make(chan overloadedResponse, 2)
+	var wg sync.WaitGroup
+	sendSlow := func() {
+		defer wg.Done()
+		req, err := http.NewRequest(http.MethodGet, baseURL+"/admission-slow", nil)
+		if err != nil {
+			t.Errorf("new request (GET /admission-slow): %v", err)
+			return
+		}
+		req.Header.Set("Accept", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Errorf("GET /admission-slow: %v", err)
+			return
+		}
+		defer resp.Body.Close()
+		payload, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusServiceUnavailable {
+			return
+		}
+		var env struct {
+			Error struct {
+				Code    string         `json:"code"`
+				Details map[string]any `json:"details"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(payload, &env); err != nil {
+			t.Errorf("decode overload envelope: %v", err)
+			return
+		}
+		reason, _ := env.Error.Details["reason"].(string)
+		results <- overloadedResponse{
+			status: resp.StatusCode,
+			code:   env.Error.Code,
+			reason: reason,
+		}
+	}
+
+	// Occupy the single in-flight slot, then send two more requests.
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		req, err := http.NewRequest(http.MethodGet, baseURL+"/admission-slow", nil)
+		if err != nil {
+			t.Errorf("new request (first /admission-slow): %v", err)
+			return
+		}
+		req.Header.Set("Accept", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Errorf("first /admission-slow: %v", err)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Errorf("first /admission-slow: got %d want 200 body=%s", resp.StatusCode, string(body))
+		}
+	}()
+	time.Sleep(20 * time.Millisecond)
+
+	wg.Add(2)
+	go sendSlow()
+	go sendSlow()
+	wg.Wait()
+	<-firstDone
+	close(results)
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 overload responses, got %d", len(results))
+	}
+	reasons := map[string]int{}
+	for r := range results {
+		if r.status != http.StatusServiceUnavailable {
+			t.Fatalf("overload status = %d, want 503", r.status)
+		}
+		if r.code != string(rstf.ErrorCodeOverloaded) {
+			t.Fatalf("overload code = %q, want %q", r.code, rstf.ErrorCodeOverloaded)
+		}
+		reasons[r.reason]++
+	}
+	if reasons["queue_full"] != 1 || reasons["queue_timeout"] != 1 {
+		t.Fatalf("expected one queue_full and one queue_timeout; got %+v", reasons)
 	}
 }

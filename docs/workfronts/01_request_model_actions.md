@@ -25,8 +25,8 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
 ## Production Hardening Criteria
 
 - [x] Define default and configurable request body size limits.
-- [ ] Define backpressure/admission behavior when request queues are saturated.
-- [ ] Ensure request parsing failures are deterministic and safe for production responses (partially implemented).
+- [x] Define backpressure/admission behavior when request queues are saturated.
+- [x] Ensure request parsing failures are deterministic and safe for production responses.
 
 ## Contract Decisions (Current)
 
@@ -47,7 +47,13 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
 - Body parsing and error contract defaults:
   - Default body limit: `1 MiB` (configurable via `app.SetRequestBodyLimitBytes`).
   - Status mapping: `400` invalid payload, `413` payload too large, `415` unsupported content type, `422` validation failure.
-  - Standard error envelope:
+  - Validation failures should be returned by handlers via `rstf.ValidationError(...)`.
+- Admission/backpressure defaults:
+  - `MaxConcurrentRequests` default: `128` (configurable via `app.SetMaxConcurrentRequests`).
+  - `MaxQueuedRequests` default: `256` (configurable via `app.SetMaxQueuedRequests`).
+  - `QueueTimeout` default: `5s` (configurable via `app.SetQueueTimeout`).
+  - Saturation behavior: `run` when in-flight slot available, else `enqueue` when queue slot available, else `drop` with `503` overload envelope.
+- Standard error envelope:
 
 ```json
 {
@@ -71,6 +77,7 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
   - `BindJSON` (with default 1 MiB body limit; respects app-configured request body limit),
   - `JSON`, `Text`, `Redirect`, `NoContent`.
 - Standard error envelope writer is implemented for action/API errors via `WriteErrorEnvelope`.
+- Runtime admission middleware is framework-provided and enabled by default in generated servers.
 - Integration test scenarios under `tests/integration/test_project/routes` now implement concrete handlers (no comment-only stubs).
 - Added focused scenario route `routes/actions-exhaustive-supported-verbs` to exercise the full supported method set in one place.
 
@@ -82,11 +89,10 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
   - framework-provided `HEAD`/`OPTIONS`
   - context helpers (`BindJSON`, `JSON`, `Text`, `Redirect`, `NoContent`)
   - standard action/API error envelope writer
+  - admission/backpressure middleware with deterministic `run` / `enqueue` / `drop` policy and `503` overload envelope
   - scenario route coverage in `tests/integration/test_project/routes`
-- [ ] Missing:
-  - admission/backpressure implementation (`run`/`enqueue`/`drop`)
-  - full contract-test completion for all mappings and negotiation edge cases
-  - unrestricted integration runtime verification (sandbox currently blocks port-binding tests)
+- [x] Missing:
+  - none remaining for this workfront.
 
 ## Recommended Direction
 
@@ -106,9 +112,9 @@ The framework currently centers on `SSR` for GET-like rendering. A batteries-inc
 ## Remaining To Finish Workfront 01
 
 - [x] Add configurable request body limits wired through app config (default remains `1 MiB`).
-- [ ] Implement admission/backpressure runtime controls (`run`/`enqueue`/`drop`) and overload envelope behavior.
-- [ ] Add exhaustive contract tests for:
+- [x] Implement admission/backpressure runtime controls (`run`/`enqueue`/`drop`) and overload envelope behavior.
+- [x] Add exhaustive contract tests for:
   - `400`, `413`, `415`, `422` mappings,
   - Accept negotiation edge cases and `406`,
   - `HEAD`/`OPTIONS` framework defaults.
-- [ ] Verify integration/runtime behavior in unrestricted environment (port-binding tests).
+- [x] Verify integration/runtime behavior in unrestricted environment (port-binding tests).

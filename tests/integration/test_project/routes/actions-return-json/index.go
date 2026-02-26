@@ -16,6 +16,11 @@ func POST(ctx *rstf.Context) error {
 	if err := ctx.BindJSON(&payload); err != nil {
 		return err
 	}
+	if payload.Title == "" {
+		return rstf.ValidationError("title is required", map[string]any{
+			"field": "title",
+		})
+	}
 
 	return ctx.JSON(201, Response{
 		ID:     "post_123",
