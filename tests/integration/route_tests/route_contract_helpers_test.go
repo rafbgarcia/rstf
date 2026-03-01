@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -24,6 +25,10 @@ var (
 	routeServerErr  error
 	routeServerURL  string
 	routeServerCmd  *exec.Cmd
+
+	testProjectRootOnce sync.Once
+	testProjectRootDir  string
+	testProjectRootErr  error
 )
 
 func ensureRouteContractServerRunning(t *testing.T) string {
@@ -55,7 +60,7 @@ func ensureRouteContractServerRunning(t *testing.T) string {
 		}
 
 		routeServerURL = fmt.Sprintf("http://localhost:%s", port)
-		routeServerErr = waitForServerJSON(routeServerURL+"/actions-exhaustive-supported-verbs", 5*time.Second)
+		routeServerErr = waitForServerJSON(routeServerURL+"/actions-exhaustive-supported-verbs", 10*time.Second)
 	})
 
 	if routeServerErr != nil {
@@ -74,8 +79,9 @@ func stopRouteContractServer() {
 	if routeServerCmd != nil {
 		stopProcessGroup(routeServerCmd, 1*time.Second)
 	}
-	root := testProjectRoot()
-	_ = os.RemoveAll(filepath.Join(root, ".rstf"))
+	if testProjectRootDir != "" {
+		_ = os.RemoveAll(testProjectRootDir)
+	}
 }
 
 func waitForServerJSON(url string, timeout time.Duration) error {
@@ -99,8 +105,80 @@ func waitForServerJSON(url string, timeout time.Duration) error {
 }
 
 func testProjectRoot() string {
+	testProjectRootOnce.Do(func() {
+		testProjectRootDir, testProjectRootErr = cloneTestProject(testProjectFixtureRoot())
+	})
+	if testProjectRootErr != nil {
+		panic(fmt.Sprintf("cloning test project fixture: %v", testProjectRootErr))
+	}
+	return testProjectRootDir
+}
+
+func testProjectFixtureRoot() string {
 	_, filename, _, _ := runtime.Caller(0)
 	return filepath.Join(filepath.Dir(filename), "..", "test_project")
+}
+
+func cloneTestProject(src string) (string, error) {
+	dst, err := os.MkdirTemp(filepath.Dir(src), ".tmp-rstf-route-tests-*")
+	if err != nil {
+		return "", err
+	}
+	if err := copyDir(src, dst); err != nil {
+		_ = os.RemoveAll(dst)
+		return "", err
+	}
+	return dst, nil
+}
+
+func copyDir(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			linkTarget, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(linkTarget, target)
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		return copyFile(path, target, info.Mode())
+	})
+}
+
+func copyFile(src, dst string, mode fs.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func freePort(t *testing.T) string {

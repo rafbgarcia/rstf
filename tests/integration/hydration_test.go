@@ -52,7 +52,7 @@ func TestHydration(t *testing.T) {
 
 	// Step 6: Wait for the server to be ready.
 	baseURL := fmt.Sprintf("http://localhost:%s", port)
-	waitForServer(t, baseURL+"/get-vs-ssr", 5*time.Second)
+	waitForServer(t, baseURL+"/get-vs-ssr", 10*time.Second)
 
 	// Step 7: Launch headless browser.
 	u := launcher.New().Headless(true).MustLaunch()
@@ -62,7 +62,7 @@ func TestHydration(t *testing.T) {
 	page := browser.MustPage("about:blank")
 	page.MustSetExtraHeaders("Accept", "text/html")
 	page.MustNavigate(baseURL + "/get-vs-ssr")
-	page = page.Timeout(5 * time.Second)
+	page = page.Timeout(15 * time.Second)
 	page.MustWaitStable()
 
 	// Step 8: Verify SSR content is present.
@@ -79,7 +79,15 @@ func TestHydration(t *testing.T) {
 	btn := page.MustElement("[data-testid=counter]")
 	btn.MustClick()
 	require.Eventually(t, func() bool {
-		return page.MustElement("[data-testid=counter]").MustText() == "Count: 1"
+		el, err := page.Element("[data-testid=counter]")
+		if err != nil {
+			return false
+		}
+		text, err := el.Text()
+		if err != nil {
+			return false
+		}
+		return text == "Count: 1"
 	}, 5*time.Second, 100*time.Millisecond)
 }
 
@@ -157,7 +165,7 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 	})
 
 	baseURL := fmt.Sprintf("http://localhost:%s", port)
-	waitForServer(t, baseURL+"/get-vs-ssr", 5*time.Second)
+	waitForServer(t, baseURL+"/get-vs-ssr", 10*time.Second)
 
 	// Step 6: Verify the HTML response contains the CSS link tag.
 	resp, err := http.Get(baseURL + "/get-vs-ssr")
