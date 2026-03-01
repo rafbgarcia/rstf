@@ -17,7 +17,7 @@ func TestCodegen(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
 
-	assert.Equal(t, 6, result.RouteCount)
+	assert.Equal(t, 7, result.RouteCount)
 
 	// Verify generated files exist.
 	expectedFiles := []string{
@@ -27,6 +27,7 @@ func TestCodegen(t *testing.T) {
 		".rstf/generated/main.ts",
 		".rstf/generated/routes/get-vs-ssr.ts",
 		".rstf/entries/get-vs-ssr.entry.tsx",
+		".rstf/entries/no-server.entry.tsx",
 	}
 	for _, f := range expectedFiles {
 		path := filepath.Join(root, f)
@@ -86,6 +87,21 @@ func TestCodegen(t *testing.T) {
 		assert.Containsf(t, entryStr, expected, "get-vs-ssr.entry.tsx missing %q\n\nFull content:\n%s", expected, entryStr)
 	}
 
+	noServerEntry, err := os.ReadFile(filepath.Join(root, ".rstf/entries/no-server.entry.tsx"))
+	require.NoError(t, err)
+	noServerEntryStr := string(noServerEntry)
+	for _, expected := range []string{
+		`import { hydrateRoot } from "react-dom/client"`,
+		`import { View as Layout } from "../../main"`,
+		`import { View as Route } from "../../routes/no-server"`,
+		`import "@rstf/main"`,
+		"hydrateRoot(document,",
+	} {
+		assert.Containsf(t, noServerEntryStr, expected, "no-server.entry.tsx missing %q\n\nFull content:\n%s", expected, noServerEntryStr)
+	}
+	assert.NotContains(t, noServerEntryStr, `import "@rstf/routes/no-server"`)
+
 	// Verify Entries map is populated.
 	assert.Contains(t, result.Entries, "routes/get-vs-ssr")
+	assert.Contains(t, result.Entries, "routes/no-server")
 }
