@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { serverData } from "@rstf/routes/get-vs-ssr";
+import { useState } from "react";
 
 export function View() {
   const { message, posts } = serverData();
@@ -12,8 +12,8 @@ export function View() {
         Count: {count}
       </button>
       <ul>
-        {posts.map((post, i) => (
-          <li key={i}>
+        {posts.map((post) => (
+          <li key={post.title}>
             {post.title} {post.published ? "(published)" : "(draft)"}
           </li>
         ))}
