@@ -5,3 +5,5 @@
 - first principles thinking; production-grade code; commit as you go in logical slices; end-user value tests;
 - HARD STOP on ambiguious decisions; design choices; compromises;
 - HARD STOP when you notice design flaws, inappropriate production code or tests;
+
+Reminder: never end with "If you want [...]" type of message.
