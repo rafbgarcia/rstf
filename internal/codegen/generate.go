@@ -98,6 +98,7 @@ func (g *Generator) Generate() (GenerateResult, error) {
 		filepath.Join(g.rstfDir, "types"),
 		filepath.Join(g.rstfDir, "generated"),
 		filepath.Join(g.rstfDir, "entries"),
+		filepath.Join(g.rstfDir, "routes"),
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return GenerateResult{}, fmt.Errorf("creating %s: %w", dir, err)
@@ -239,6 +240,11 @@ func (g *Generator) Generate() (GenerateResult, error) {
 	}
 
 	// --- Phase 4: sequential finalization ---
+
+	routeDefs := BuildRouteDefs(files, deps)
+	if err := writeRouteHelpers(g.rstfDir, routeDefs); err != nil {
+		return GenerateResult{}, err
+	}
 
 	serverCode, err := GenerateServer(g.modulePath, files, deps)
 	if err != nil {
@@ -425,6 +431,11 @@ func (g *Generator) Regenerate(events []ChangeEvent) (RegenerateResult, error) {
 	}
 
 	// 9. Generate server_gen.go, compare with previous.
+	routeDefs := BuildRouteDefs(g.files, newDeps)
+	if err := writeRouteHelpers(g.rstfDir, routeDefs); err != nil {
+		return RegenerateResult{}, err
+	}
+
 	serverCode, err := GenerateServer(g.modulePath, g.files, newDeps)
 	if err != nil {
 		return RegenerateResult{}, fmt.Errorf("generating server: %w", err)
@@ -484,6 +495,20 @@ func writeDTSAndRuntime(rstfDir string, rf RouteFile) error {
 			return fmt.Errorf("writing %s: %w", rtPath, err)
 		}
 	}
+	return nil
+}
+
+func writeRouteHelpers(rstfDir string, routeDefs []RouteDef) error {
+	tsPath := filepath.Join(rstfDir, "generated", "routes.ts")
+	if err := os.WriteFile(tsPath, []byte(GenerateRoutesTS(routeDefs)), 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", tsPath, err)
+	}
+
+	goPath := filepath.Join(rstfDir, "routes", "routes_gen.go")
+	if err := os.WriteFile(goPath, []byte(GenerateRoutesGo(routeDefs)), 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", goPath, err)
+	}
+
 	return nil
 }
 

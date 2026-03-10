@@ -17,13 +17,16 @@ func TestCodegen(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
 
-	assert.Equal(t, 7, result.RouteCount)
+	assert.Equal(t, 8, result.RouteCount)
 
 	// Verify generated files exist.
 	expectedFiles := []string{
 		".rstf/server_gen.go",
+		".rstf/generated/routes.ts",
+		".rstf/routes/routes_gen.go",
 		".rstf/types/main.d.ts",
 		".rstf/types/get-vs-ssr.d.ts",
+		".rstf/types/users-id.d.ts",
 		".rstf/generated/main.ts",
 		".rstf/generated/routes/get-vs-ssr.ts",
 		".rstf/entries/get-vs-ssr.entry.tsx",
@@ -52,6 +55,21 @@ func TestCodegen(t *testing.T) {
 	dashModStr := string(dashMod)
 	assert.Contains(t, dashModStr, `typeof window !== "undefined"`)
 	assert.Contains(t, dashModStr, `__RSTF_SERVER_DATA__["routes/get-vs-ssr"]`)
+
+	routesMod, err := os.ReadFile(filepath.Join(root, ".rstf/generated/routes.ts"))
+	require.NoError(t, err)
+	routesModStr := string(routesMod)
+	assert.Contains(t, routesModStr, `export function url(name: "get-vs-ssr"): string;`)
+	assert.Contains(t, routesModStr, `export function url(name: "users.$id", params: { id: RouteParamValue }): string;`)
+	assert.Contains(t, routesModStr, `"users.$id": { path: "/users/$id", params: ["id"] }`)
+
+	goRoutes, err := os.ReadFile(filepath.Join(root, ".rstf/routes/routes_gen.go"))
+	require.NoError(t, err)
+	goRoutesStr := string(goRoutes)
+	assert.Contains(t, goRoutesStr, "package routes")
+	assert.Contains(t, goRoutesStr, "func URL[P any](route Route[P], params P) Location {")
+	assert.Contains(t, goRoutesStr, "var UsersParamId = Route[UsersParamIdParams]{")
+	assert.Contains(t, goRoutesStr, `return Location("/users/" + url.PathEscape(params.Id))`)
 
 	// Verify server_gen.go content.
 	serverCode, err := os.ReadFile(filepath.Join(root, ".rstf/server_gen.go"))

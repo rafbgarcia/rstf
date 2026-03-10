@@ -22,5 +22,5 @@ func TestRouteActionsRedirect(t *testing.T) {
 	require.NoErrorf(t, err, "POST /actions-redirect")
 	_ = resp.Body.Close()
 	require.Equal(t, http.StatusSeeOther, resp.StatusCode, "POST /actions-redirect")
-	require.Equal(t, "/get-vs-ssr", resp.Header.Get("Location"), "POST /actions-redirect location")
+	require.Equal(t, "/users/123", resp.Header.Get("Location"), "POST /actions-redirect location")
 }

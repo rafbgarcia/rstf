@@ -137,6 +137,22 @@ func (c *Context) Redirect(status int, location string) error {
 	return nil
 }
 
+type redirectTarget interface {
+	URL() string
+}
+
+func (c *Context) RedirectTo(status int, target redirectTarget) error {
+	if target == nil {
+		return &RequestError{
+			Code:    ErrorCodeInternal,
+			Message: "redirect target is not initialized",
+			Status:  http.StatusInternalServerError,
+		}
+	}
+
+	return c.Redirect(status, target.URL())
+}
+
 func (c *Context) NoContent() error {
 	if c == nil || c.Writer == nil {
 		return &RequestError{
