@@ -58,7 +58,6 @@ func TestGenerateRoutesTS(t *testing.T) {
 	for _, expected := range []string{
 		`export const routes = {`,
 		`"index": {`,
-		`name: "index",`,
 		`pattern: "/",`,
 		`url(): string {`,
 		`return "/";`,

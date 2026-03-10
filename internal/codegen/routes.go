@@ -73,7 +73,6 @@ func GenerateRoutesTS(routeDefs []RouteDef) string {
 	b.WriteString("export const routes = {\n")
 	for _, route := range routeDefs {
 		fmt.Fprintf(&b, "  %q: {\n", route.Name)
-		fmt.Fprintf(&b, "    name: %q,\n", route.Name)
 		fmt.Fprintf(&b, "    pattern: %q,\n", route.Pattern)
 		if len(route.Params) == 0 {
 			b.WriteString("    url(): string {\n")

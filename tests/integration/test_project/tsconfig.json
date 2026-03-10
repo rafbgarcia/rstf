@@ -1,6 +1,11 @@
 {
   "compilerOptions": {
     "jsx": "react-jsx",
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "noImplicitAny": true,
     "paths": {
       "@rstf/*": ["./.rstf/generated/*"],
     },
