@@ -56,15 +56,17 @@ func TestGenerateRoutesTS(t *testing.T) {
 	})
 
 	for _, expected := range []string{
-		"export type RouteParamValue = string | number;",
-		`export type RouteName =`,
-		`"index"`,
-		`"users.$id"`,
-		`"users.$id": { path: "/users/$id", params: ["id"] }`,
-		`export function url(name: "index"): string;`,
-		`export function url(name: "users.$id", params: { id: RouteParamValue }): string;`,
-		"path = path.replace(`$${paramName}`, encodeURIComponent(String(value)));",
-		"export const routes = { url } as const;",
+		`export const routes = {`,
+		`"index": {`,
+		`name: "index",`,
+		`pattern: "/",`,
+		`url(): string {`,
+		`return "/";`,
+		`"users.$id": {`,
+		`pattern: "/users/{id}",`,
+		`url(params: { id: string }): string {`,
+		`return "/users/" + encodeURIComponent(params.id);`,
+		`export type RouteName = keyof typeof routes;`,
 	} {
 		assert.Contains(t, got, expected, "missing %q\n\n%s", expected, got)
 	}
@@ -88,16 +90,18 @@ func TestGenerateRoutesGo(t *testing.T) {
 	for _, expected := range []string{
 		"package routes",
 		"type Location string",
-		"func URL[P any](route Route[P], params P) Location {",
 		"type IndexParams struct {",
-		"func IndexURL() Location {",
-		"type UsersParamIdParams struct {",
+		"type IndexRoute struct{}",
+		"func (IndexRoute) URL() Location {",
+		"var Index IndexRoute",
+		"type UsersDotIdParams struct {",
 		"\tId string",
-		"var UsersParamId = Route[UsersParamIdParams]{",
-		`name: "users.$id",`,
-		`pattern: "/users/{id}",`,
+		"type UsersDotIdRoute struct{}",
+		`func (UsersDotIdRoute) Name() string { return "users.$id" }`,
+		`func (UsersDotIdRoute) Pattern() string { return "/users/{id}" }`,
 		`return Location("/users/" + url.PathEscape(params.Id))`,
-		"func UsersParamIdURL(params UsersParamIdParams) Location {",
+		"func (UsersDotIdRoute) URL(params UsersDotIdParams) Location {",
+		"var UsersDotId UsersDotIdRoute",
 	} {
 		assert.Contains(t, got, expected, "missing %q\n\n%s", expected, got)
 	}

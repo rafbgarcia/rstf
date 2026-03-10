@@ -6,7 +6,7 @@ import (
 )
 
 func POST(ctx *rstf.Context) error {
-	return ctx.RedirectTo(303, routes.URL(routes.UsersParamId, routes.UsersParamIdParams{
+	return ctx.RedirectTo(303, routes.UsersDotId.URL(routes.UsersDotIdParams{
 		Id: "123",
 	}))
 }
