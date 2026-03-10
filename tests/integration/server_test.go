@@ -40,6 +40,10 @@ func TestEndToEnd(t *testing.T) {
 					{"title": "Draft Post", "published": false},
 				},
 			},
+			"shared/ui/user-avatar": {
+				"name":   "Ada Lovelace",
+				"status": "staff",
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -49,7 +53,7 @@ func TestEndToEnd(t *testing.T) {
 	// so the expected string is clean and not coupled to React internals.
 	got := strings.ReplaceAll(html, "<!-- -->", "")
 
-	want := `<html><head><title>Basic Example</title><title>Dashboard - Welcome to the dashboard!</title></head><body><header><h1>Basic Example</h1><nav><a href="/get-vs-ssr">Dashboard</a></nav></header><main><div><h2 class="text-blue-500">Welcome to the dashboard!</h2><button data-testid="counter">Count: 0</button><ul><li>First Post (published)</li><li>Draft Post (draft)</li></ul></div></main></body></html>`
+	want := `<html><head><title>Basic Example</title><title>Dashboard - Welcome to the dashboard!</title></head><body><header><h1>Basic Example</h1><nav><a href="/get-vs-ssr">Dashboard</a></nav></header><main><div><h2 class="text-blue-500">Welcome to the dashboard!</h2><aside data-testid="user-avatar"><strong>Ada Lovelace</strong> <span>(staff)</span></aside><button data-testid="counter">Count: 0</button><ul><li>First Post (published)</li><li>Draft Post (draft)</li></ul></div></main></body></html>`
 
 	assert.Equal(t, want, got, "HTML mismatch")
 }

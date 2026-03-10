@@ -1,4 +1,5 @@
 import { serverData } from "@rstf/routes/get-vs-ssr";
+import { UserAvatar } from "../../shared/ui/user-avatar";
 import { useState } from "react";
 
 export function View() {
@@ -8,6 +9,7 @@ export function View() {
     <div>
       <title>{`Dashboard - ${message}`}</title>
       <h2 className="text-blue-500">{message}</h2>
+      <UserAvatar />
       <button data-testid="counter" onClick={() => setCount((c) => c + 1)}>
         Count: {count}
       </button>

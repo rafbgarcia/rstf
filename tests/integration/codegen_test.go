@@ -26,9 +26,11 @@ func TestCodegen(t *testing.T) {
 		".rstf/routes/routes_gen.go",
 		".rstf/types/main.d.ts",
 		".rstf/types/get-vs-ssr.d.ts",
+		".rstf/types/shared-ui-user-avatar.d.ts",
 		".rstf/types/users-id.d.ts",
 		".rstf/generated/main.ts",
 		".rstf/generated/routes/get-vs-ssr.ts",
+		".rstf/generated/shared/ui/user-avatar.ts",
 		".rstf/entries/get-vs-ssr.entry.tsx",
 		".rstf/entries/no-server.entry.tsx",
 	}
@@ -49,12 +51,24 @@ func TestCodegen(t *testing.T) {
 	assert.Contains(t, string(dashDTS), "declare namespace RoutesGetVsSsr")
 	assert.Contains(t, string(dashDTS), "posts: Post[]")
 
+	avatarDTS, err := os.ReadFile(filepath.Join(root, ".rstf/types/shared-ui-user-avatar.d.ts"))
+	require.NoError(t, err)
+	assert.Contains(t, string(avatarDTS), "declare namespace SharedUiUserAvatar")
+	assert.Contains(t, string(avatarDTS), "name: string")
+	assert.Contains(t, string(avatarDTS), "status: string")
+
 	// Verify runtime module has dual-mode initialization.
 	dashMod, err := os.ReadFile(filepath.Join(root, ".rstf/generated/routes/get-vs-ssr.ts"))
 	require.NoError(t, err)
 	dashModStr := string(dashMod)
 	assert.Contains(t, dashModStr, `typeof window !== "undefined"`)
 	assert.Contains(t, dashModStr, `__RSTF_SERVER_DATA__["routes/get-vs-ssr"]`)
+
+	avatarMod, err := os.ReadFile(filepath.Join(root, ".rstf/generated/shared/ui/user-avatar.ts"))
+	require.NoError(t, err)
+	avatarModStr := string(avatarMod)
+	assert.Contains(t, avatarModStr, `typeof window !== "undefined"`)
+	assert.Contains(t, avatarModStr, `__RSTF_SERVER_DATA__["shared/ui/user-avatar"]`)
 
 	routesMod, err := os.ReadFile(filepath.Join(root, ".rstf/generated/routes.ts"))
 	require.NoError(t, err)
@@ -85,10 +99,12 @@ func TestCodegen(t *testing.T) {
 		"package main",
 		`app "github.com/rafbgarcia/rstf/tests/integration/test_project"`,
 		`dashboard "github.com/rafbgarcia/rstf/tests/integration/test_project/routes/get-vs-ssr"`,
+		`useravatar "github.com/rafbgarcia/rstf/tests/integration/test_project/shared/ui/user-avatar"`,
 		`Component: "routes/get-vs-ssr"`,
 		`Layout: "main"`,
 		"structToMap(app.SSR(ctx))",
 		"structToMap(dashboard.SSR(ctx))",
+		`sd["shared/ui/user-avatar"] = structToMap(useravatar.SSR(ctx))`,
 		"func assemblePage(",
 		`rt.Handle("/.rstf/static/*"`,
 		"assemblePage(html, sd,",
@@ -106,6 +122,7 @@ func TestCodegen(t *testing.T) {
 		`import { View as Route } from "../../routes/get-vs-ssr"`,
 		`import "@rstf/main"`,
 		`import "@rstf/routes/get-vs-ssr"`,
+		`import "@rstf/shared/ui/user-avatar"`,
 		"hydrateRoot(document,",
 	} {
 		assert.Containsf(t, entryStr, expected, "get-vs-ssr.entry.tsx missing %q\n\nFull content:\n%s", expected, entryStr)
