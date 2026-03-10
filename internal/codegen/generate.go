@@ -2,10 +2,12 @@ package codegen
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 
@@ -522,21 +524,36 @@ func discoverTSXRouteDirs(absRoot string) ([]string, error) {
 		return nil, nil
 	}
 
-	entries, err := os.ReadDir(routesDir)
+	var dirs []string
+	err := filepath.WalkDir(routesDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+
+		relDir, err := filepath.Rel(absRoot, path)
+		if err != nil {
+			return err
+		}
+		relDir = filepath.ToSlash(relDir)
+		if err := conventions.ValidateRouteDir(relDir); err != nil {
+			return err
+		}
+		if relDir == "routes" {
+			return nil
+		}
+
+		if _, err := os.Stat(filepath.Join(path, "index.tsx")); err == nil {
+			dirs = append(dirs, relDir)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	var dirs []string
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		tsxPath := filepath.Join(routesDir, e.Name(), "index.tsx")
-		if _, err := os.Stat(tsxPath); err == nil {
-			dirs = append(dirs, filepath.ToSlash(filepath.Join("routes", e.Name())))
-		}
-	}
+	sort.Strings(dirs)
 	return dirs, nil
 }
 

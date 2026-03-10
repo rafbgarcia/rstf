@@ -14,7 +14,18 @@ type App struct {
 	maxConcurrentRequests int
 	maxQueuedRequests     int
 	queueTimeout          time.Duration
+	readHeaderTimeout     time.Duration
+	readTimeout           time.Duration
+	writeTimeout          time.Duration
+	idleTimeout           time.Duration
 }
+
+const (
+	DefaultReadHeaderTimeout = 5 * time.Second
+	DefaultReadTimeout       = 30 * time.Second
+	DefaultWriteTimeout      = 30 * time.Second
+	DefaultIdleTimeout       = 2 * time.Minute
+)
 
 // NewApp creates an unconfigured App.
 func NewApp() *App {
@@ -23,6 +34,10 @@ func NewApp() *App {
 		maxConcurrentRequests: DefaultMaxConcurrentRequests,
 		maxQueuedRequests:     DefaultMaxQueuedRequests,
 		queueTimeout:          DefaultQueueTimeout,
+		readHeaderTimeout:     DefaultReadHeaderTimeout,
+		readTimeout:           DefaultReadTimeout,
+		writeTimeout:          DefaultWriteTimeout,
+		idleTimeout:           DefaultIdleTimeout,
 	}
 }
 
@@ -111,6 +126,74 @@ func (a *App) QueueTimeout() time.Duration {
 		return DefaultQueueTimeout
 	}
 	return a.queueTimeout
+}
+
+// SetReadHeaderTimeout sets the maximum time allowed to read request headers.
+func (a *App) SetReadHeaderTimeout(timeout time.Duration) error {
+	if timeout <= 0 {
+		return fmt.Errorf("read header timeout must be greater than zero")
+	}
+	a.readHeaderTimeout = timeout
+	return nil
+}
+
+// ReadHeaderTimeout returns the configured request header read timeout.
+func (a *App) ReadHeaderTimeout() time.Duration {
+	if a.readHeaderTimeout <= 0 {
+		return DefaultReadHeaderTimeout
+	}
+	return a.readHeaderTimeout
+}
+
+// SetReadTimeout sets the maximum duration for reading the entire request.
+func (a *App) SetReadTimeout(timeout time.Duration) error {
+	if timeout <= 0 {
+		return fmt.Errorf("read timeout must be greater than zero")
+	}
+	a.readTimeout = timeout
+	return nil
+}
+
+// ReadTimeout returns the configured full request read timeout.
+func (a *App) ReadTimeout() time.Duration {
+	if a.readTimeout <= 0 {
+		return DefaultReadTimeout
+	}
+	return a.readTimeout
+}
+
+// SetWriteTimeout sets the maximum duration before timing out a response write.
+func (a *App) SetWriteTimeout(timeout time.Duration) error {
+	if timeout <= 0 {
+		return fmt.Errorf("write timeout must be greater than zero")
+	}
+	a.writeTimeout = timeout
+	return nil
+}
+
+// WriteTimeout returns the configured response write timeout.
+func (a *App) WriteTimeout() time.Duration {
+	if a.writeTimeout <= 0 {
+		return DefaultWriteTimeout
+	}
+	return a.writeTimeout
+}
+
+// SetIdleTimeout sets how long keep-alive connections may remain idle.
+func (a *App) SetIdleTimeout(timeout time.Duration) error {
+	if timeout <= 0 {
+		return fmt.Errorf("idle timeout must be greater than zero")
+	}
+	a.idleTimeout = timeout
+	return nil
+}
+
+// IdleTimeout returns the configured keep-alive idle timeout.
+func (a *App) IdleTimeout() time.Duration {
+	if a.idleTimeout <= 0 {
+		return DefaultIdleTimeout
+	}
+	return a.idleTimeout
 }
 
 // Close shuts down the application, closing the database connection pool if open.

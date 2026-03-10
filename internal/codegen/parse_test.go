@@ -121,6 +121,24 @@ func DoSomething() string {
 	assert.Len(t, routes, 0)
 }
 
+func TestParseDirRejectsNestedRouteDirectories(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "routes", "admin", "users", "index.go"), `
+package users
+
+type ServerData struct{}
+
+func SSR() ServerData {
+	return ServerData{}
+}
+`)
+
+	_, err := ParseDir(dir)
+	require.Error(t, err)
+	require.ErrorContains(t, err, `invalid route directory "routes/admin/users"`)
+	require.ErrorContains(t, err, "use dotted names like routes/admin.users")
+}
+
 func TestParseDirNoContext(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "page", "page.go"), `

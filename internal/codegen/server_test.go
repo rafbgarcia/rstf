@@ -127,7 +127,12 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`os.Stat(".rstf/static/main.css")`,
 		`flag.String("port", "3000", "HTTP server port")`,
 		`flag.Parse()`,
-		`http.ListenAndServe(":"+*port, rt)`,
+		`srv := &http.Server{`,
+		`ReadHeaderTimeout: rstfApp.ReadHeaderTimeout()`,
+		`ReadTimeout:       rstfApp.ReadTimeout()`,
+		`WriteTimeout:      rstfApp.WriteTimeout()`,
+		`IdleTimeout:       rstfApp.IdleTimeout()`,
+		`srv.ListenAndServe()`,
 	}
 
 	for _, exp := range expectations {

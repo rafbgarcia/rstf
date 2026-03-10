@@ -529,7 +529,16 @@ func writeMain(
 	}
 
 	b.WriteString(`
-	if err := http.ListenAndServe(":"+*port, rt); err != nil {
+	srv := &http.Server{
+		Addr:              ":" + *port,
+		Handler:           rt,
+		ReadHeaderTimeout: rstfApp.ReadHeaderTimeout(),
+		ReadTimeout:       rstfApp.ReadTimeout(),
+		WriteTimeout:      rstfApp.WriteTimeout(),
+		IdleTimeout:       rstfApp.IdleTimeout(),
+	}
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "server error: %s\n", err)
 		os.Exit(1)
 	}

@@ -18,6 +18,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/rafbgarcia/rstf/internal/conventions"
 )
 
 // RouteFunc represents a parsed route handler function (e.g. SSR).
@@ -127,6 +129,15 @@ func ParseSingleDir(rootDir, absDir string) (*RouteFile, error) {
 
 // parseRouteDir parses all Go files in a single route directory.
 func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
+	relDir, err := filepath.Rel(rootDir, dir)
+	if err != nil {
+		return nil, fmt.Errorf("relative path for %s: %w", dir, err)
+	}
+	relDir = filepath.ToSlash(relDir)
+	if err := conventions.ValidateRouteDir(relDir); err != nil {
+		return nil, err
+	}
+
 	fset := token.NewFileSet()
 	var allFiles []*ast.File
 
@@ -195,8 +206,6 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 			structs = append(structs, sd)
 		}
 	}
-
-	relDir, _ := filepath.Rel(rootDir, dir)
 
 	return &RouteFile{
 		Dir:              relDir,

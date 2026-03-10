@@ -3,6 +3,7 @@
 package conventions
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -30,8 +31,37 @@ func FolderToURLPattern(folderName string) string {
 	return "/" + strings.Join(segments, "/")
 }
 
-// IsRouteDir reports whether a path (relative to the project root) is
-// inside the routes/ directory.
+// IsRouteDir reports whether a path is a valid route directory according to
+// rstf's file-based routing rules. Route directories live directly under
+// routes/ and use dotted names for nesting semantics (for example,
+// routes/admin.users rather than routes/admin/users).
 func IsRouteDir(path string) bool {
+	if path == "routes" {
+		return true
+	}
+	if !isWithinRoutes(path) {
+		return false
+	}
+	name := strings.TrimPrefix(path, "routes/")
+	return name != "" && !strings.Contains(name, "/")
+}
+
+// ValidateRouteDir reports a clear error when a path violates rstf's route
+// directory convention.
+func ValidateRouteDir(path string) error {
+	if !isWithinRoutes(path) || path == "routes" {
+		return nil
+	}
+	name := strings.TrimPrefix(path, "routes/")
+	if strings.Contains(name, "/") {
+		return fmt.Errorf(
+			"invalid route directory %q: nested route directories are not supported; use dotted names like routes/admin.users",
+			path,
+		)
+	}
+	return nil
+}
+
+func isWithinRoutes(path string) bool {
 	return path == "routes" || strings.HasPrefix(path, "routes/")
 }

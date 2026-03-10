@@ -33,7 +33,9 @@ func TestIsRouteDir(t *testing.T) {
 	}{
 		{"routes", true},
 		{"routes/dashboard", true},
+		{"routes/admin.users", true},
 		{"routes/users.$id.edit", true},
+		{"routes/admin/users", false},
 		{"shared/ui/button", false},
 		{"shared/hooks", false},
 		{"main", false},
@@ -43,4 +45,17 @@ func TestIsRouteDir(t *testing.T) {
 		got := IsRouteDir(tt.path)
 		assert.Equal(t, tt.want, got, "IsRouteDir(%q)", tt.path)
 	}
+}
+
+func TestValidateRouteDir(t *testing.T) {
+	assert.NoError(t, ValidateRouteDir("routes"))
+	assert.NoError(t, ValidateRouteDir("routes/dashboard"))
+	assert.NoError(t, ValidateRouteDir("routes/admin.users"))
+
+	err := ValidateRouteDir("routes/admin/users")
+	assert.EqualError(
+		t,
+		err,
+		`invalid route directory "routes/admin/users": nested route directories are not supported; use dotted names like routes/admin.users`,
+	)
 }
