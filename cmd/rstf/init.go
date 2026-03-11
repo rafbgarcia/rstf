@@ -32,9 +32,9 @@ func newInitCmd() *cobra.Command {
 			}
 
 			if skipInstall {
-				fmt.Println("\n  App scaffolded. Run `npm install` and then `npm run dev` inside the app directory.")
+				fmt.Println("\n  App scaffolded. Run `npm install` and then `rstf dev` inside the app directory.")
 			} else {
-				fmt.Println("\n  App ready. Run `cd " + cfg.Name + " && npm run dev`.")
+				fmt.Println("\n  App ready. Run `cd " + cfg.Name + " && rstf dev`.")
 			}
 			return nil
 		},

@@ -3,7 +3,6 @@ package scaffold
 import (
 	"fmt"
 	"go/token"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,7 +22,6 @@ type Config struct {
 	Module        string
 	PackageName   string
 	FrameworkPath string
-	CLIPackage    string
 	TargetDir     string
 }
 
@@ -88,7 +86,6 @@ func DeriveConfig(name string, module string) (Config, error) {
 		Module:        moduleName,
 		PackageName:   packageName,
 		FrameworkPath: frameworkRoot(),
-		CLIPackage:    npmFileDependency(filepath.Join(frameworkRoot(), "packages", "cli")),
 		TargetDir:     targetDir,
 	}, nil
 }
@@ -192,14 +189,6 @@ func frameworkRoot() string {
 	return filepath.Dir(filepath.Dir(filepath.Dir(filename)))
 }
 
-func npmFileDependency(absPath string) string {
-	u := &url.URL{
-		Scheme: "file",
-		Path:   filepath.ToSlash(absPath),
-	}
-	return u.String()
-}
-
 func humanizeName(name string) string {
 	replacer := strings.NewReplacer("-", " ", "_", " ", ".", " ")
 	parts := strings.Fields(replacer.Replace(name))
@@ -263,7 +252,6 @@ const packageJSONTemplate = `{
     "tsx": "^4.21.0"
   },
   "devDependencies": {
-    "@rstf/cli": "{{ .CLIPackage }}",
     "@tailwindcss/postcss": "^4.2.1",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

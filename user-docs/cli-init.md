@@ -26,7 +26,6 @@ The scaffold is not a toy. It includes:
 - an initial generated `rstf/` tree
 
 The generated app is wired to the current local framework checkout with a `replace github.com/rafbgarcia/rstf => /path/to/rstf` entry in `go.mod`.
-It also installs a local `@rstf/cli` package in `package.json` so the app can run `rstf` through npm scripts.
 
 ## Flags
 
@@ -39,5 +38,5 @@ After a normal `rstf init my-app`, the app is ready for:
 
 ```bash
 cd my-app
-npm run dev
+rstf dev
 ```

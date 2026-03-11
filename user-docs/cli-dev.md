@@ -2,12 +2,6 @@
 
 `rstf dev` runs the local development loop from the app root.
 
-In scaffolded apps, the preferred entrypoint is:
-
-```bash
-npm run dev
-```
-
 ## Usage
 
 ```bash
@@ -37,7 +31,6 @@ The dev runtime is app-owned:
 - generated files live in the app's `rstf/` directory
 
 That means a scaffolded app can run without relying on this repo's `node_modules`.
-The `rstf` binary comes from the app's local `@rstf/cli` package.
 
 ## Generated Output
 

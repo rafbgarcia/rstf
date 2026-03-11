@@ -26,6 +26,5 @@ Thumbs.db
 # JS
 node_modules/
 bun.lockb
-packages/cli/dist/
 
 .claude/*local*

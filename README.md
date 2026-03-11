@@ -10,16 +10,11 @@ Today the framework is designed to be used from a local checkout of this reposit
 
 1. Install the `rstf` CLI from this repo.
 2. Run `rstf init <name>` to create a full app.
-3. Use `npm run dev` for the local loop through the app-local CLI.
-4. Use `npm run build` to produce a deployable `dist/` directory.
+3. Use `rstf dev` for the local loop.
+4. Use `rstf build` to produce a deployable `dist/` directory.
 5. Start production by executing the Go binary inside `dist/`.
 
-Generated apps are currently wired back to your local checkout in two places:
-
-- `go.mod` includes `replace github.com/rafbgarcia/rstf => /path/to/rstf`
-- `package.json` includes a local `@rstf/cli` dependency that exposes the `rstf` binary through npm scripts
-
-That is intentional while the framework is still greenfield.
+Generated apps are currently wired back to your local checkout with a `replace github.com/rafbgarcia/rstf => /path/to/rstf` entry in `go.mod`. That is intentional while the framework is still greenfield.
 
 ## Prerequisites
 
@@ -38,7 +33,7 @@ go install ./cmd/rstf
 ```bash
 rstf init my-app
 cd my-app
-npm run dev
+rstf dev
 ```
 
 The generated app includes:
@@ -52,19 +47,10 @@ The generated app includes:
 Build output goes to `dist/`:
 
 ```bash
-npm run build
+rstf build
 cd dist
 ./my-app
 ```
-
-## Bootstrap Direction
-
-The repo now includes the npm-native bootstrap packages under:
-
-- [packages/create-rstf](/Users/rafa/github.com/rafbgarcia/rstf/packages/create-rstf)
-- [packages/cli](/Users/rafa/github.com/rafbgarcia/rstf/packages/cli)
-
-The intended published entrypoint is `npm create rstf@latest`. Until those packages are published, the supported local-checkout bootstrap flow remains `rstf init`.
 
 ## Docs
 
