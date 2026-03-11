@@ -26,7 +26,7 @@ let renderToString: any;
 
 async function ensureRSTFAlias(): Promise<void> {
   const scopeDir = path.join(projectRoot, "node_modules", "@rstf");
-  const target = path.join(projectRoot, ".rstf", "generated");
+  const target = path.join(projectRoot, "rstf", "generated");
 
   await mkdir(path.dirname(scopeDir), { recursive: true });
   try {
@@ -39,7 +39,6 @@ async function ensureRSTFAlias(): Promise<void> {
     // Missing alias dir; create symlink.
   }
 
-  // Use relative target so the project remains movable.
   const relTarget = path.relative(path.dirname(scopeDir), target);
   await symlink(relTarget, scopeDir, "dir");
 }
@@ -95,12 +94,12 @@ async function resolveGeneratedModules(
     entries.map(async ([componentPath, data]) => {
       let mod = generatedModuleCache.get(componentPath);
       if (!mod) {
-        const genPath = path.join(projectRoot, ".rstf", "generated", `${componentPath}.ts`);
+        const genPath = path.join(projectRoot, "rstf", "generated", `${componentPath}.ts`);
         try {
           mod = await importVersioned(genPath);
           generatedModuleCache.set(componentPath, mod);
         } catch {
-          return; // No generated module — component has no .go file.
+          return;
         }
       }
       if (typeof mod.__setServerData === "function") {
@@ -151,7 +150,6 @@ const server = createServer(async (req, res) => {
       const Layout = await loadComponent(body.layout);
       const Route = await loadComponent(body.component);
 
-      // Synchronous phase: no await between data set and render.
       for (const [mod, data] of generatedModules) {
         mod.__setServerData(data);
       }
@@ -170,7 +168,6 @@ const server = createServer(async (req, res) => {
 async function main(): Promise<void> {
   await ensureRSTFAlias();
 
-  // Resolve React from the project's node_modules to ensure a single React instance.
   const reactPath = nodeRequire.resolve("react", { paths: [projectRoot] });
   const reactDomServerPath = nodeRequire.resolve("react-dom/server", {
     paths: [projectRoot],
@@ -184,7 +181,6 @@ async function main(): Promise<void> {
       console.error("failed to bind sidecar port");
       process.exit(1);
     }
-    // Print port to stdout so the Go process can read it.
     console.log(addr.port);
   });
 }

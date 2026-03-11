@@ -14,14 +14,28 @@ import (
 	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/rafbgarcia/rstf/internal/codegen"
 	"github.com/rafbgarcia/rstf/internal/watcher"
+	"github.com/spf13/cobra"
 )
 
-func runDev(port string) {
+func newDevCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dev",
+		Short: "Start the development server",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			port, _ := cmd.Flags().GetString("port")
+			return runDev(port)
+		},
+	}
+
+	cmd.Flags().String("port", "3000", "HTTP server port")
+	return cmd
+}
+
+func runDev(port string) error {
 	// Step 1: Create generator and run initial codegen.
 	gen, err := codegen.NewGenerator(".")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "codegen init error: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("codegen init error: %w", err)
 	}
 
 	fmt.Print("  Codegen ......... ")
@@ -29,18 +43,16 @@ func runDev(port string) {
 	result, err := gen.Generate()
 	if err != nil {
 		fmt.Println("FAILED")
-		fmt.Fprintf(os.Stderr, "codegen error: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("codegen error: %w", err)
 	}
 	fmt.Printf("done (%d routes) [%s]\n", result.RouteCount, fmtDuration(time.Since(t)))
 
 	// Step 2: Bundle client JS for each route.
 	fmt.Print("  Client bundles .. ")
 	t = time.Now()
-	if err := bundler.BundleEntries(".", result.Entries); err != nil {
+	if err := buildClientBundles(result); err != nil {
 		fmt.Println("FAILED")
-		fmt.Fprintf(os.Stderr, "bundling error: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("bundling error: %w", err)
 	}
 	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 
@@ -50,8 +62,7 @@ func runDev(port string) {
 		t = time.Now()
 		if err := buildCSS(); err != nil {
 			fmt.Println("FAILED")
-			fmt.Fprintf(os.Stderr, "css error: %s\n", err)
-			os.Exit(1)
+			return fmt.Errorf("css error: %w", err)
 		}
 		fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 	}
@@ -66,8 +77,7 @@ func runDev(port string) {
 	eventCh := make(chan []watcher.Event, 100)
 	w := watcher.New(".", func(batch []watcher.Event) { eventCh <- batch })
 	if err := w.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "watcher error: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("watcher error: %w", err)
 	}
 
 	// Step 6: Event loop — react to file changes and SIGINT.
@@ -105,7 +115,7 @@ func runDev(port string) {
 		case <-sigCh:
 			w.Stop()
 			stopServer(server)
-			return
+			return nil
 		}
 	}
 }
@@ -141,7 +151,7 @@ func handleCodeChange(gen *codegen.Generator, server *exec.Cmd, result *codegen.
 
 	fmt.Print("  Client bundles .. ")
 	t = time.Now()
-	if err := bundler.BundleEntries(".", regenResult.Entries); err != nil {
+	if err := buildClientBundles(regenResult.GenerateResult); err != nil {
 		fmt.Println("FAILED")
 		fmt.Fprintf(os.Stderr, "  bundling error: %s\n", err)
 	} else {
@@ -181,7 +191,7 @@ func handleCssChange() {
 // The process is placed in its own process group so stopServer can kill
 // both `go run` and the child binary it spawns.
 func startServer(port string) *exec.Cmd {
-	cmd := exec.Command("go", "run", "./.rstf/server_gen.go", "--port", port)
+	cmd := exec.Command("go", "run", "./rstf/server_gen.go", "--port", port)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -191,6 +201,10 @@ func startServer(port string) *exec.Cmd {
 		os.Exit(1)
 	}
 	return cmd
+}
+
+func buildClientBundles(result codegen.GenerateResult) error {
+	return bundler.BundleEntries(".", result.Entries)
 }
 
 // stopServer kills the server's entire process group (go run + child binary),
@@ -204,10 +218,10 @@ func stopServer(cmd *exec.Cmd) {
 	cmd.Wait()
 }
 
-// invalidateSidecar reads the sidecar port from .rstf/sidecar.port and POSTs
+// invalidateSidecar reads the sidecar port from rstf/sidecar.port and POSTs
 // to /invalidate to clear the module cache.
 func invalidateSidecar() {
-	data, err := os.ReadFile(".rstf/sidecar.port")
+	data, err := os.ReadFile("rstf/sidecar.port")
 	if err != nil {
 		return // sidecar may not have written port yet
 	}
@@ -231,7 +245,7 @@ func buildCSS() error {
 		return nil // no CSS to build
 	}
 
-	outDir := filepath.Join(".rstf", "static")
+	outDir := filepath.Join("rstf", "static")
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return fmt.Errorf("creating %s: %w", outDir, err)
 	}
@@ -254,7 +268,19 @@ func buildCSS() error {
 	return nil
 }
 
-// buildCSSWithPostCSS writes a small build script to .rstf/ and runs it with
+func currentAppName() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("getting current directory: %w", err)
+	}
+	name := filepath.Base(cwd)
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "", fmt.Errorf("could not derive app name from %s", cwd)
+	}
+	return name, nil
+}
+
+// buildCSSWithPostCSS writes a small build script to rstf/ and runs it with
 // node. The script loads the user's postcss.config.mjs and processes main.css.
 func buildCSSWithPostCSS(outFile string) error {
 	script := `import { readFileSync, writeFileSync, mkdirSync } from "fs";
@@ -278,10 +304,10 @@ const result = await postcss(plugins).process(css, {
   to: resolve("` + outFile + `"),
 });
 
-mkdirSync(resolve(".rstf/static"), { recursive: true });
+mkdirSync(resolve("rstf/static"), { recursive: true });
 writeFileSync(resolve("` + outFile + `"), result.css);
 `
-	scriptPath := filepath.Join(".rstf", "build-css.mjs")
+	scriptPath := filepath.Join("rstf", "build-css.mjs")
 	if err := os.WriteFile(scriptPath, []byte(script), 0644); err != nil {
 		return fmt.Errorf("writing build-css.mjs: %w", err)
 	}

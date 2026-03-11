@@ -48,6 +48,10 @@ func cloneTestProject(src string) (string, error) {
 		_ = os.RemoveAll(dst)
 		return "", err
 	}
+	if err := installTestProjectDependencies(dst); err != nil {
+		_ = os.RemoveAll(dst)
+		return "", err
+	}
 	return dst, nil
 }
 
@@ -61,6 +65,13 @@ func copyDir(src, dst string) error {
 			return err
 		}
 		if rel == "." {
+			return nil
+		}
+		base := filepath.Base(rel)
+		if base == "node_modules" || base == ".rstf" || base == "rstf" || base == "dist" {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		target := filepath.Join(dst, rel)
@@ -99,6 +110,20 @@ func copyFile(src, dst string, mode fs.FileMode) error {
 		return err
 	}
 	return out.Close()
+}
+
+func installTestProjectDependencies(dir string) error {
+	cmd := exec.Command("npm", "install")
+	cmd.Dir = dir
+	cmd.Env = append(
+		os.Environ(),
+		"NO_UPDATE_NOTIFIER=1",
+		"npm_config_fund=false",
+		"npm_config_audit=false",
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func TestMain(m *testing.M) {

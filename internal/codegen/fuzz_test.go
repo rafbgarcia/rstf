@@ -70,7 +70,7 @@ func FuzzNamespace(f *testing.F) {
 	f.Add(".")
 	f.Add("dashboard")
 	f.Add("routes/dashboard")
-	f.Add("routes/users/$id")
+	f.Add("routes/users/_id")
 	f.Add("auth/forgot-password")
 	f.Add("shared/ui/user-avatar")
 	f.Add("")
@@ -149,7 +149,7 @@ func FuzzGenerateDTS(f *testing.F) {
 	f.Add("dashboard", "ServerData", "title", "string", "Post", "name", "string")
 	f.Add(".", "Data", "count", "number", "", "", "")
 	f.Add("auth/login", "Response", "token", "string", "Session", "id", "number")
-	f.Add("routes/users/$id", "Profile", "email", "string", "Settings", "theme", "boolean")
+	f.Add("routes/users/_id", "Profile", "email", "string", "Settings", "theme", "boolean")
 
 	f.Fuzz(func(t *testing.T, dir, structName, field1JSON, field1Type, struct2Name, field2JSON, field2Type string) {
 		rf := RouteFile{
@@ -194,7 +194,7 @@ func FuzzGenerateDTS(f *testing.F) {
 func FuzzGenerateRuntimeModule(f *testing.F) {
 	f.Add("dashboard", "ServerData", "dashboard")
 	f.Add(".", "Data", "main")
-	f.Add("routes/users/$id", "Profile", "routes/users/$id")
+	f.Add("routes/users/_id", "Profile", "routes/users/_id")
 	f.Add("auth/login", "Response", "auth/login")
 
 	f.Fuzz(func(t *testing.T, dir, returnType, componentPath string) {

@@ -8,15 +8,15 @@ import (
 )
 
 // FolderToURLPattern converts a route folder name to a Go 1.22+ ServeMux
-// URL pattern. Dots become path separators, $param becomes {param}, and
+// URL pattern. Dots become path separators, _param becomes {param}, and
 // the folder name "index" maps to "/".
 //
 // Examples:
 //
 //	"index"           → "/"
 //	"dashboard"       → "/dashboard"
-//	"users.$id"       → "/users/{id}"
-//	"users.$id.edit"  → "/users/{id}/edit"
+//	"users._id"       → "/users/{id}"
+//	"users._id.edit"  → "/users/{id}/edit"
 func FolderToURLPattern(folderName string) string {
 	if folderName == "index" {
 		return "/"
@@ -24,7 +24,7 @@ func FolderToURLPattern(folderName string) string {
 
 	segments := strings.Split(folderName, ".")
 	for i, seg := range segments {
-		if strings.HasPrefix(seg, "$") {
+		if isDynamicSegment(seg) {
 			segments[i] = "{" + seg[1:] + "}"
 		}
 	}
@@ -64,4 +64,8 @@ func ValidateRouteDir(path string) error {
 
 func isWithinRoutes(path string) bool {
 	return path == "routes" || strings.HasPrefix(path, "routes/")
+}
+
+func isDynamicSegment(seg string) bool {
+	return len(seg) > 1 && strings.HasPrefix(seg, "_")
 }

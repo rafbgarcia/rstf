@@ -53,7 +53,7 @@ func GenerateDTS(rf RouteFile) string {
 	return b.String()
 }
 
-// GenerateRuntimeModule produces the .rstf/generated/{path}.ts module that exports
+// GenerateRuntimeModule produces the rstf/generated/{path}.ts module that exports
 // a serverData() function and an internal __setServerData() function.
 //
 // The module is dual-mode: on the server, _data starts empty and is set by

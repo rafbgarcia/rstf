@@ -26,19 +26,19 @@ func assemblePage(html string, serverData map[string]map[string]any, bundlePath 
 func TestAssemblePage_WithCSS(t *testing.T) {
 	html := "<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>"
 	sd := map[string]map[string]any{"main": {"key": "val"}}
-	cssPath := "/.rstf/static/main.css"
+	cssPath := "/rstf/static/main.css"
 
-	got := assemblePage(html, sd, "/.rstf/static/dashboard/bundle.js", cssPath)
+	got := assemblePage(html, sd, "/rstf/static/dashboard/bundle.js", cssPath)
 
 	checks := []struct {
 		desc string
 		want string
 	}{
 		{"doctype", "<!DOCTYPE html>"},
-		{"css link tag", `<link rel="stylesheet" href="/.rstf/static/main.css">`},
+		{"css link tag", `<link rel="stylesheet" href="/rstf/static/main.css">`},
 		{"css before </head>", `main.css">` + "\n</head>"},
 		{"data script", `window.__RSTF_SERVER_DATA__`},
-		{"bundle script", `<script src="/.rstf/static/dashboard/bundle.js"></script>`},
+		{"bundle script", `<script src="/rstf/static/dashboard/bundle.js"></script>`},
 	}
 	for _, c := range checks {
 		assert.Contains(t, got, c.want, "%s: output missing %q\n\nFull output:\n%s", c.desc, c.want, got)
@@ -56,7 +56,7 @@ func TestAssemblePage_WithoutCSS(t *testing.T) {
 	html := "<html><head><title>Test</title></head><body><h1>Hello</h1></body></html>"
 	sd := map[string]map[string]any{"main": {"key": "val"}}
 
-	got := assemblePage(html, sd, "/.rstf/static/dashboard/bundle.js", "")
+	got := assemblePage(html, sd, "/rstf/static/dashboard/bundle.js", "")
 
 	assert.NotContains(t, got, "<link", "should not contain <link> tag when cssPath is empty\n\nFull output:\n%s", got)
 
@@ -113,7 +113,7 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`defer r.Stop()`,
 		`signal.Notify(c, os.Interrupt, syscall.SIGTERM)`,
 		`rt := router.New()`,
-		`rt.Handle("/.rstf/static/*"`,
+		`rt.Handle("/rstf/static/*"`,
 		`rt.Handle("/dashboard"`,
 		"ctx := rstf.NewContext(req)",
 		`sd["main"] = structToMap(app.SSR(ctx))`,
@@ -123,8 +123,8 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`Component: "routes/dashboard"`,
 		`Layout: "main"`,
 		`http.Error(w, err.Error(), 500)`,
-		`assemblePage(html, sd, "/.rstf/static/dashboard/bundle.js", cssPath)`,
-		`os.Stat(".rstf/static/main.css")`,
+		`assemblePage(html, sd, "/rstf/static/dashboard/bundle.js", cssPath)`,
+		`os.Stat("rstf/static/main.css")`,
 		`flag.String("port", "3000", "HTTP server port")`,
 		`flag.Parse()`,
 		`srv := &http.Server{`,
@@ -161,7 +161,7 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 			Structs: []StructDef{{Name: "ServerData"}},
 		},
 		{
-			Dir:     "routes/users.$id.edit",
+			Dir:     "routes/users._id.edit",
 			Package: "useredit",
 			Funcs:   []RouteFunc{{Name: "SSR", ReturnType: "ServerData", HasContext: true}},
 			Structs: []StructDef{{Name: "ServerData"}},
@@ -170,7 +170,7 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 	deps := map[string][]string{
 		"routes/index":          {"routes/index"},
 		"routes/dashboard":      {"routes/dashboard"},
-		"routes/users.$id.edit": {"routes/users.$id.edit"},
+		"routes/users._id.edit": {"routes/users._id.edit"},
 	}
 
 	got, err := GenerateServer("github.com/user/myapp", files, deps)
@@ -181,15 +181,11 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 		`rt.Handle("/",`,
 		`rt.Handle("/dashboard",`,
 		`rt.Handle("/users/{id}/edit",`,
-		// Dynamic route should use .rstf/pkgs/ symlink path ($ stripped).
-		`useredit "github.com/user/myapp/.rstf/pkgs/routes/users.id.edit"`,
+		`useredit "github.com/user/myapp/routes/users._id.edit"`,
 	}
 	for _, exp := range expectations {
 		assert.Contains(t, got, exp, "output missing %q\n\nFull output:\n%s", exp, got)
 	}
-
-	// Non-dynamic routes should NOT use the pkgs path.
-	assert.NotContains(t, got, `.rstf/pkgs/routes/dashboard`, "non-dynamic route should not use .rstf/pkgs path\n\nFull output:\n%s", got)
 
 	// Verify routes are sorted: / comes before /dashboard comes before /users/{id}/edit.
 	idxRoot := strings.Index(got, `rt.Handle("/",`)
@@ -200,9 +196,9 @@ func TestGenerateServer_MultipleRoutes(t *testing.T) {
 
 	// Verify bundle paths.
 	bundleExpectations := []string{
-		`"/.rstf/static/index/bundle.js"`,
-		`"/.rstf/static/dashboard/bundle.js"`,
-		`"/.rstf/static/users-id-edit/bundle.js"`,
+		`"/rstf/static/index/bundle.js"`,
+		`"/rstf/static/dashboard/bundle.js"`,
+		`"/rstf/static/users-id-edit/bundle.js"`,
 	}
 	for _, exp := range bundleExpectations {
 		assert.Contains(t, got, exp, "output missing bundle path %q\n\nFull output:\n%s", exp, got)

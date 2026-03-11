@@ -88,7 +88,7 @@ func ParseDir(rootDir string) ([]RouteFile, error) {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".rstf", ".git", "node_modules", "vendor":
+			case "rstf", ".rstf", ".git", "node_modules", "vendor":
 				return filepath.SkipDir
 			}
 			return nil

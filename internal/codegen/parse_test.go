@@ -193,7 +193,7 @@ func SSR(ctx *rstf.Context) Session {
 
 func TestParseDirDetectsRPCFunctions(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "routes", "chat.$id", "index.go"), `
+	writeFile(t, filepath.Join(dir, "routes", "chat._id", "index.go"), `
 package chat
 
 import rstf "github.com/rafbgarcia/rstf"

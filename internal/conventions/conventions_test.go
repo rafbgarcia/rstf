@@ -14,11 +14,11 @@ func TestFolderToURLPattern(t *testing.T) {
 		{"index", "/"},
 		{"dashboard", "/dashboard"},
 		{"about", "/about"},
-		{"users.$id", "/users/{id}"},
-		{"users.$id.edit", "/users/{id}/edit"},
-		{"posts.$slug", "/posts/{slug}"},
+		{"users._id", "/users/{id}"},
+		{"users._id.edit", "/users/{id}/edit"},
+		{"posts._slug", "/posts/{slug}"},
 		{"settings.billing", "/settings/billing"},
-		{"org.$orgId.members.$memberId", "/org/{orgId}/members/{memberId}"},
+		{"org._orgId.members._memberId", "/org/{orgId}/members/{memberId}"},
 	}
 	for _, tt := range tests {
 		got := FolderToURLPattern(tt.folder)
@@ -34,7 +34,7 @@ func TestIsRouteDir(t *testing.T) {
 		{"routes", true},
 		{"routes/dashboard", true},
 		{"routes/admin.users", true},
-		{"routes/users.$id.edit", true},
+		{"routes/users._id.edit", true},
 		{"routes/admin/users", false},
 		{"shared/ui/button", false},
 		{"shared/hooks", false},

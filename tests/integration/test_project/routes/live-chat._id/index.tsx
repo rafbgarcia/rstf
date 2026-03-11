@@ -3,8 +3,8 @@ import { routes, useMutation, useQuery } from "@rstf/routes";
 
 export function View() {
   const [draft, setDraft] = useState("");
-  const query = useQuery(routes["live-chat.$id"].GetMessages, { id: "room-1" });
-  const sendMessage = useMutation(routes["live-chat.$id"].SendMessage, { id: "room-1" });
+  const query = useQuery(routes["live-chat._id"].GetMessages, { id: "room-1" });
+  const sendMessage = useMutation(routes["live-chat._id"].SendMessage, { id: "room-1" });
 
   if (query.status === "loading") {
     return <div data-testid="messages-loading">Loading messages...</div>;

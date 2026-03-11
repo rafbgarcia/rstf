@@ -67,7 +67,7 @@ func NewGenerator(projectRoot string) (*Generator, error) {
 
 	return &Generator{
 		root:       absRoot,
-		rstfDir:    filepath.Join(absRoot, ".rstf"),
+		rstfDir:    filepath.Join(absRoot, "rstf"),
 		modulePath: modulePath,
 		filesByDir: make(map[string]RouteFile),
 		deps:       make(map[string][]string),
@@ -82,9 +82,10 @@ func NewGenerator(projectRoot string) (*Generator, error) {
 func (g *Generator) Generate() (GenerateResult, error) {
 	// --- Phase 1: sequential setup ---
 
-	// 1. Clean slate — remove .rstf/ since everything in it is generated.
+	// 1. Clean slate — remove generated directories since everything in them is generated.
+	_ = os.RemoveAll(filepath.Join(g.root, ".rstf"))
 	if err := os.RemoveAll(g.rstfDir); err != nil {
-		return GenerateResult{}, fmt.Errorf("removing .rstf/: %w", err)
+		return GenerateResult{}, fmt.Errorf("removing rstf/: %w", err)
 	}
 
 	// 2. Parse all Go route files.
@@ -93,7 +94,7 @@ func (g *Generator) Generate() (GenerateResult, error) {
 		return GenerateResult{}, fmt.Errorf("parsing project: %w", err)
 	}
 
-	// Create .rstf/ directory structure before any parallel writes.
+	// Create rstf/ directory structure before any parallel writes.
 	for _, dir := range []string{
 		filepath.Join(g.rstfDir, "types"),
 		filepath.Join(g.rstfDir, "generated"),
@@ -187,21 +188,6 @@ func (g *Generator) Generate() (GenerateResult, error) {
 				setErr(err)
 			}
 		}(rf)
-	}
-
-	// Create symlinks for directories with $ (dynamic segments).
-	for _, f := range files {
-		if !strings.Contains(f.Dir, "$") || f.Dir == "." {
-			continue
-		}
-		sanitized := strings.ReplaceAll(f.Dir, "$", "")
-		linkPath := filepath.Join(g.rstfDir, "pkgs", sanitized)
-		if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
-			return GenerateResult{}, fmt.Errorf("creating symlink parent for %s: %w", f.Dir, err)
-		}
-		if err := os.Symlink(filepath.Join(g.root, f.Dir), linkPath); err != nil {
-			return GenerateResult{}, fmt.Errorf("creating symlink for %s: %w", f.Dir, err)
-		}
 	}
 
 	wg.Wait()
@@ -323,32 +309,13 @@ func (g *Generator) Regenerate(events []ChangeEvent) (RegenerateResult, error) {
 		g.files = append(g.files, rf)
 	}
 
-	// 5. Handle $ symlinks for changed dirs.
-	for relDir := range goChangedDirs {
-		if !strings.Contains(relDir, "$") || relDir == "." {
-			continue
-		}
-		sanitized := strings.ReplaceAll(relDir, "$", "")
-		linkPath := filepath.Join(g.rstfDir, "pkgs", sanitized)
-		// Remove stale symlink, re-create.
-		os.Remove(linkPath)
-		if _, exists := g.filesByDir[relDir]; exists {
-			if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
-				return RegenerateResult{}, fmt.Errorf("creating symlink parent for %s: %w", relDir, err)
-			}
-			if err := os.Symlink(filepath.Join(g.root, relDir), linkPath); err != nil {
-				return RegenerateResult{}, fmt.Errorf("creating symlink for %s: %w", relDir, err)
-			}
-		}
-	}
-
-	// 6. Re-discover TSX-only routes.
+	// 5. Re-discover TSX-only routes.
 	tsxRouteDirs, err := discoverTSXRouteDirs(g.root)
 	if err != nil {
 		return RegenerateResult{}, fmt.Errorf("discovering TSX routes: %w", err)
 	}
 
-	// 7. Re-run AnalyzeDeps for all routes (parallel, warm cache).
+	// 6. Re-run AnalyzeDeps for all routes (parallel, warm cache).
 	type depJob struct {
 		dir       string
 		entryPath string
@@ -411,7 +378,7 @@ func (g *Generator) Regenerate(events []ChangeEvent) (RegenerateResult, error) {
 		return RegenerateResult{}, firstErr
 	}
 
-	// 8. Diff old vs new deps → only write hydration entries that changed.
+	// 7. Diff old vs new deps → only write hydration entries that changed.
 	newEntries := make(map[string]string, len(g.entries))
 	for routeDir, routeDeps := range newDeps {
 		if !conventions.IsRouteDir(routeDir) {
@@ -430,7 +397,7 @@ func (g *Generator) Regenerate(events []ChangeEvent) (RegenerateResult, error) {
 		}
 	}
 
-	// 9. Generate server_gen.go, compare with previous.
+	// 8. Generate server_gen.go, compare with previous.
 	routeDefs := BuildRouteDefs(g.files, newDeps)
 	if err := writeRouteHelpers(g.rstfDir, routeDefs); err != nil {
 		return RegenerateResult{}, err
@@ -448,7 +415,7 @@ func (g *Generator) Regenerate(events []ChangeEvent) (RegenerateResult, error) {
 		}
 	}
 
-	// 10. Update cached state.
+	// 9. Update cached state.
 	g.deps = newDeps
 	g.entries = newEntries
 	g.prevServerCode = serverCode
@@ -591,17 +558,14 @@ func discoverTSXRouteDirs(absRoot string) ([]string, error) {
 //
 //	"."                       → "main.d.ts"
 //	"routes/dashboard"        → "dashboard.d.ts"
-//	"routes/users.$id.edit"   → "users-id-edit.d.ts"
+//	"routes/users._id.edit"   → "users-id-edit.d.ts"
 //	"shared/ui/user-avatar"   → "shared-ui-user-avatar.d.ts"
 func dtsFileName(dir string) string {
 	if dir == "." {
 		return "main.d.ts"
 	}
 	name := strings.TrimPrefix(dir, "routes/")
-	name = strings.ReplaceAll(name, "$", "")
-	name = strings.ReplaceAll(name, ".", "-")
-	name = strings.ReplaceAll(name, "/", "-")
-	return name + ".d.ts"
+	return routeArtifactName(name) + ".d.ts"
 }
 
 // runtimeModulePath returns the runtime module path for a given directory.
@@ -628,13 +592,25 @@ func componentPathForDir(dir string) string {
 	return dir
 }
 
+func routeArtifactName(name string) string {
+	segments := strings.FieldsFunc(name, func(r rune) bool {
+		return r == '.' || r == '/'
+	})
+	if len(segments) == 0 {
+		return name
+	}
+
+	for i, seg := range segments {
+		if len(seg) > 1 && strings.HasPrefix(seg, "_") {
+			segments[i] = seg[1:]
+		}
+	}
+	return strings.Join(segments, "-")
+}
+
 // ensureDeps runs `go get` for framework packages that the generated
-// server_gen.go imports. Since server_gen.go lives in .rstf/ (a dot-prefixed
-// directory invisible to go mod tidy), its transitive dependencies (e.g. chi
-// via rstf/router) won't appear in go.sum otherwise.
-//
-// Skipped when the current module IS the framework (sub-packages are local)
-// or when the framework module is already recorded in go.sum.
+// server_gen.go imports when they are not already resolved in the app module.
+// This keeps go.sum consistent for generated entrypoints and framework helpers.
 func ensureDeps(projectRoot, modulePath string) error {
 	// Developing the framework itself — sub-packages are local.
 	if modulePath == frameworkModule {

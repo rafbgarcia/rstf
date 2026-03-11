@@ -1,6 +1,7 @@
 package renderer
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -14,8 +15,36 @@ func testdataDir() string {
 	return filepath.Join(filepath.Dir(filename), "testdata")
 }
 
+func repoRootDir() string {
+	_, filename, _, _ := runtime.Caller(0)
+	return filepath.Dir(filepath.Dir(filename))
+}
+
+func ensureLocalNodeModules(t *testing.T) {
+	t.Helper()
+
+	nodeModulesDir := filepath.Join(testdataDir(), "node_modules")
+	require.NoError(t, os.MkdirAll(nodeModulesDir, 0755))
+
+	for _, pkg := range []string{"tsx", "react", "react-dom", "scheduler"} {
+		linkPath := filepath.Join(nodeModulesDir, pkg)
+		if _, err := os.Lstat(linkPath); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			require.NoError(t, err)
+		}
+
+		target := filepath.Join(repoRootDir(), "node_modules", pkg)
+		require.NoError(t, os.Symlink(target, linkPath))
+		t.Cleanup(func() {
+			_ = os.Remove(linkPath)
+		})
+	}
+}
+
 func startRenderer(t *testing.T) *Renderer {
 	t.Helper()
+	ensureLocalNodeModules(t)
 	r := New()
 	require.NoError(t, r.Start(testdataDir()))
 	t.Cleanup(func() { r.Stop() })
@@ -23,6 +52,7 @@ func startRenderer(t *testing.T) *Renderer {
 }
 
 func TestStartStop(t *testing.T) {
+	ensureLocalNodeModules(t)
 	r := New()
 	require.NoError(t, r.Start(testdataDir()))
 	require.NotZero(t, r.port)

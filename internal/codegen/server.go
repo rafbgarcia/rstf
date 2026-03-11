@@ -35,7 +35,7 @@ type routeEntry struct {
 	rpcFuncs      []RouteFunc
 }
 
-// GenerateServer produces the content of .rstf/server_gen.go — the Go entry
+// GenerateServer produces the content of rstf/server_gen.go — the Go entry
 // point that wires routes to handlers, calls route functions, and renders via
 // the Node sidecar.
 func GenerateServer(modulePath string, files []RouteFile, deps map[string][]string) (string, error) {
@@ -158,9 +158,6 @@ func collectImports(
 		if dir == "." {
 			importPath = modulePath
 			baseAlias = "app"
-		} else if strings.Contains(dir, "$") {
-			importPath = modulePath + "/.rstf/pkgs/" + strings.ReplaceAll(dir, "$", "")
-			baseAlias = rf.Package
 		} else {
 			importPath = modulePath + "/" + dir
 			baseAlias = rf.Package
@@ -715,11 +712,11 @@ func writeMain(
 	}
 
 	b.WriteString(`
-	rt.Handle("/.rstf/static/*", http.StripPrefix("/.rstf/static/", http.FileServer(http.Dir(".rstf/static"))))
+	rt.Handle("/rstf/static/*", http.StripPrefix("/rstf/static/", http.FileServer(http.Dir("rstf/static"))))
 
 	var cssPath string
-	if _, err := os.Stat(".rstf/static/main.css"); err == nil {
-		cssPath = "/.rstf/static/main.css"
+	if _, err := os.Stat("rstf/static/main.css"); err == nil {
+		cssPath = "/rstf/static/main.css"
 	}
 
 	liveHub := rstf.NewLiveHub()

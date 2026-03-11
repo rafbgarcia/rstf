@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	rstf "github.com/rafbgarcia/rstf"
-	"github.com/rafbgarcia/rstf/tests/integration/test_project/.rstf/routes"
+	"github.com/rafbgarcia/rstf/tests/integration/test_project/rstf/routes"
 )
 
 type Message struct {

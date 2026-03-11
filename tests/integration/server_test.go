@@ -18,7 +18,7 @@ func TestEndToEnd(t *testing.T) {
 	// Step 1: Run codegen.
 	_, err := codegen.Generate(root)
 	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
+	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
 
 	// Step 2: Start the renderer sidecar.
 	r := renderer.New()

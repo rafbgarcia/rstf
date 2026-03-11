@@ -295,6 +295,11 @@ func routeTemplate(routeName string) string {
 	}
 
 	segments := strings.Split(routeName, ".")
+	for i, seg := range segments {
+		if isDynamicRouteSegment(seg) {
+			segments[i] = "{" + seg[1:] + "}"
+		}
+	}
 	return "/" + strings.Join(segments, "/")
 }
 
@@ -305,10 +310,10 @@ func routeParamsForName(routeName string) []RouteParamDef {
 
 	var params []RouteParamDef
 	for _, seg := range strings.Split(routeName, ".") {
-		if !strings.HasPrefix(seg, "$") {
+		if !isDynamicRouteSegment(seg) {
 			continue
 		}
-		name := strings.TrimPrefix(seg, "$")
+		name := strings.TrimPrefix(seg, "_")
 		params = append(params, RouteParamDef{
 			Name:    name,
 			GoField: goExportedName(name),
@@ -327,7 +332,7 @@ func routeSymbol(routeName string) string {
 		if i > 0 {
 			b.WriteString("Dot")
 		}
-		b.WriteString(goExportedName(strings.TrimPrefix(seg, "$")))
+		b.WriteString(goExportedName(strings.TrimPrefix(seg, "_")))
 	}
 	return b.String()
 }
@@ -398,9 +403,9 @@ func goLocationExpr(route RouteDef) string {
 
 	for _, seg := range strings.Split(route.Name, ".") {
 		static.WriteString("/")
-		if strings.HasPrefix(seg, "$") {
+		if isDynamicRouteSegment(seg) {
 			appendStatic()
-			exprs = append(exprs, "url.PathEscape(params."+goExportedName(strings.TrimPrefix(seg, "$"))+")")
+			exprs = append(exprs, "url.PathEscape(params."+goExportedName(strings.TrimPrefix(seg, "_"))+")")
 			continue
 		}
 		static.WriteString(seg)
@@ -427,9 +432,9 @@ func tsLocationExpr(route RouteDef) string {
 
 	for _, seg := range strings.Split(route.Name, ".") {
 		static.WriteString("/")
-		if strings.HasPrefix(seg, "$") {
+		if isDynamicRouteSegment(seg) {
 			appendStatic()
-			exprs = append(exprs, "encodeURIComponent(params."+tsPropertyAccess(strings.TrimPrefix(seg, "$"))+")")
+			exprs = append(exprs, "encodeURIComponent(params."+tsPropertyAccess(strings.TrimPrefix(seg, "_"))+")")
 			continue
 		}
 		static.WriteString(seg)
@@ -492,4 +497,8 @@ func tsPropertyAccess(name string) string {
 		return name
 	}
 	return "[" + strconv.Quote(name) + "]"
+}
+
+func isDynamicRouteSegment(seg string) bool {
+	return len(seg) > 1 && strings.HasPrefix(seg, "_")
 }

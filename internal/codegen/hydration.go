@@ -7,14 +7,14 @@ import (
 )
 
 // GenerateHydrationEntry produces the content of a hydration entry file
-// (.rstf/entries/{name}.entry.tsx) for a route directory.
+// (rstf/entries/{name}.entry.tsx) for a route directory.
 //
 // routeDir is the route directory relative to project root (e.g. "routes/dashboard").
 // allDeps is the list of all dependency directories that have .go files for this
 // route (e.g. ["routes/dashboard", "shared/ui/user-avatar"]). The layout (".")
 // is NOT expected in allDeps — it is always included.
 //
-// The entry file is generated inside .rstf/entries/, so relative imports use
+// The entry file is generated inside rstf/entries/, so relative imports use
 // "../../" to reach the project root.
 func GenerateHydrationEntry(routeDir string, allDeps []string) string {
 	var b strings.Builder
@@ -38,13 +38,10 @@ func GenerateHydrationEntry(routeDir string, allDeps []string) string {
 //
 //	"routes/dashboard"       → "dashboard"
 //	"routes/index"           → "index"
-//	"routes/users.$id.edit"  → "users-id-edit"
+//	"routes/users._id.edit"  → "users-id-edit"
 func entryName(routeDir string) string {
 	name := strings.TrimPrefix(routeDir, "routes/")
-	name = strings.ReplaceAll(name, "$", "")
-	name = strings.ReplaceAll(name, ".", "-")
-	name = strings.ReplaceAll(name, "/", "-")
-	return name
+	return routeArtifactName(name)
 }
 
 // entryFileName returns the full filename for an entry file.
@@ -56,7 +53,7 @@ func entryFileName(routeDir string) string {
 
 // bundlePath returns the URL path for a route's client bundle.
 //
-//	"routes/dashboard" → "/.rstf/static/dashboard/bundle.js"
+//	"routes/dashboard" → "/rstf/static/dashboard/bundle.js"
 func bundlePath(routeDir string) string {
-	return filepath.ToSlash(filepath.Join("/.rstf/static", entryName(routeDir), "bundle.js"))
+	return filepath.ToSlash(filepath.Join("/rstf/static", entryName(routeDir), "bundle.js"))
 }

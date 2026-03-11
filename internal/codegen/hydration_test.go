@@ -44,7 +44,7 @@ func TestEntryName(t *testing.T) {
 	}{
 		{"routes/dashboard", "dashboard"},
 		{"routes/index", "index"},
-		{"routes/users.$id.edit", "users-id-edit"},
+		{"routes/users._id.edit", "users-id-edit"},
 	}
 	for _, tt := range tests {
 		got := entryName(tt.routeDir)
@@ -62,8 +62,8 @@ func TestBundlePath(t *testing.T) {
 		routeDir string
 		want     string
 	}{
-		{"routes/dashboard", "/.rstf/static/dashboard/bundle.js"},
-		{"routes/users.$id.edit", "/.rstf/static/users-id-edit/bundle.js"},
+		{"routes/dashboard", "/rstf/static/dashboard/bundle.js"},
+		{"routes/users._id.edit", "/rstf/static/users-id-edit/bundle.js"},
 	}
 	for _, tt := range tests {
 		got := bundlePath(tt.routeDir)

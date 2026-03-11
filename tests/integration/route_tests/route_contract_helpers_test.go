@@ -42,7 +42,7 @@ func ensureRouteContractServerRunning(t *testing.T) string {
 			return
 		}
 
-		build := exec.Command("go", "build", "-o", filepath.Join(root, ".rstf", "server"), "./.rstf/server_gen.go")
+		build := exec.Command("go", "build", "-o", filepath.Join(root, "rstf", "server"), "./rstf/server_gen.go")
 		build.Dir = root
 		out, err := build.CombinedOutput()
 		if err != nil {
@@ -51,7 +51,7 @@ func ensureRouteContractServerRunning(t *testing.T) string {
 		}
 
 		port := freePort(t)
-		routeServerCmd = exec.Command(filepath.Join(root, ".rstf", "server"), "--port", port)
+		routeServerCmd = exec.Command(filepath.Join(root, "rstf", "server"), "--port", port)
 		routeServerCmd.Dir = root
 		routeServerCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		if err := routeServerCmd.Start(); err != nil {
@@ -128,6 +128,10 @@ func cloneTestProject(src string) (string, error) {
 		_ = os.RemoveAll(dst)
 		return "", err
 	}
+	if err := installTestProjectDependencies(dst); err != nil {
+		_ = os.RemoveAll(dst)
+		return "", err
+	}
 	return dst, nil
 }
 
@@ -141,6 +145,13 @@ func copyDir(src, dst string) error {
 			return err
 		}
 		if rel == "." {
+			return nil
+		}
+		base := filepath.Base(rel)
+		if base == "node_modules" || base == ".rstf" || base == "rstf" || base == "dist" {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		target := filepath.Join(dst, rel)
@@ -179,6 +190,20 @@ func copyFile(src, dst string, mode fs.FileMode) error {
 		return err
 	}
 	return out.Close()
+}
+
+func installTestProjectDependencies(dir string) error {
+	cmd := exec.Command("npm", "install")
+	cmd.Dir = dir
+	cmd.Env = append(
+		os.Environ(),
+		"NO_UPDATE_NOTIFIER=1",
+		"npm_config_fund=false",
+		"npm_config_audit=false",
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func freePort(t *testing.T) string {

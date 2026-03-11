@@ -200,4 +200,3 @@ func dirHasGoFile(dir string) bool {
 	matches, _ := filepath.Glob(filepath.Join(dir, "*.go"))
 	return len(matches) > 0
 }
-

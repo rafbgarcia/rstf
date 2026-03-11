@@ -27,7 +27,7 @@ func TestHydration(t *testing.T) {
 	// Step 1: Run codegen.
 	result, err := codegen.Generate(root)
 	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
+	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
 
 	// Step 2: Bundle client JS for each entry.
 	require.NoError(t, bundler.BundleEntries(root, result.Entries))
@@ -36,7 +36,7 @@ func TestHydration(t *testing.T) {
 	port := freePort(t)
 
 	// Step 4: Build the generated server first to catch compilation errors.
-	build := exec.Command("go", "build", "-o", filepath.Join(root, ".rstf", "server"), "./.rstf/server_gen.go")
+	build := exec.Command("go", "build", "-o", filepath.Join(root, "rstf", "server"), "./rstf/server_gen.go")
 	build.Dir = root
 	if out, err := build.CombinedOutput(); err != nil {
 		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
@@ -44,7 +44,7 @@ func TestHydration(t *testing.T) {
 
 	// Step 5: Start the compiled server. The generated server handles SIGINT
 	// gracefully — it stops the Node sidecar before exiting.
-	server := exec.Command(filepath.Join(root, ".rstf", "server"), "--port", port)
+	server := exec.Command(filepath.Join(root, "rstf", "server"), "--port", port)
 	server.Dir = root
 	server.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	require.NoError(t, server.Start())
@@ -98,18 +98,18 @@ func TestLiveQueryUpdatesAcrossClients(t *testing.T) {
 
 	result, err := codegen.Generate(root)
 	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
+	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
 
 	require.NoError(t, bundler.BundleEntries(root, result.Entries))
 
 	port := freePort(t)
-	build := exec.Command("go", "build", "-o", filepath.Join(root, ".rstf", "server"), "./.rstf/server_gen.go")
+	build := exec.Command("go", "build", "-o", filepath.Join(root, "rstf", "server"), "./rstf/server_gen.go")
 	build.Dir = root
 	if out, err := build.CombinedOutput(); err != nil {
 		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
 	}
 
-	server := exec.Command(filepath.Join(root, ".rstf", "server"), "--port", port)
+	server := exec.Command(filepath.Join(root, "rstf", "server"), "--port", port)
 	server.Dir = root
 	server.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	require.NoError(t, server.Start())
@@ -153,7 +153,7 @@ func TestLiveQueryUpdatesAcrossClients(t *testing.T) {
 		return err == nil && strings.Contains(text, "Hello from the server")
 	}, 5*time.Second, 100*time.Millisecond)
 
-	reqBody := bytes.NewBufferString(`{"kind":"mutation","route":"live-chat.$id","name":"SendMessage","params":{"id":"room-1"},"input":{"body":"Second message"}}`)
+	reqBody := bytes.NewBufferString(`{"kind":"mutation","route":"live-chat._id","name":"SendMessage","params":{"id":"room-1"},"input":{"body":"Second message"}}`)
 	resp, err := http.Post(baseURL+"/__rstf/rpc", "application/json", reqBody)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -177,13 +177,13 @@ func TestCSS(t *testing.T) {
 	// Step 1: Run codegen.
 	result, err := codegen.Generate(root)
 	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
+	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
 
 	// Step 2: Bundle client JS.
 	require.NoError(t, bundler.BundleEntries(root, result.Entries))
 
 	// Step 3: Build CSS via PostCSS (same approach as dev.go's buildCSSWithPostCSS).
-	outFile := filepath.Join(".rstf", "static", "main.css")
+	outFile := filepath.Join("rstf", "static", "main.css")
 	script := `import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { pathToFileURL } from "url";
@@ -205,10 +205,10 @@ const result = await postcss(plugins).process(css, {
   to: resolve("` + outFile + `"),
 });
 
-mkdirSync(resolve(".rstf/static"), { recursive: true });
+mkdirSync(resolve("rstf/static"), { recursive: true });
 writeFileSync(resolve("` + outFile + `"), result.css);
 `
-	scriptPath := filepath.Join(root, ".rstf", "build-css.mjs")
+	scriptPath := filepath.Join(root, "rstf", "build-css.mjs")
 	require.NoError(t, os.WriteFile(scriptPath, []byte(script), 0644))
 
 	cmd := exec.Command("node", scriptPath)
@@ -217,7 +217,7 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 	require.NoError(t, cmd.Run())
 
 	// Step 4: Verify the built CSS file exists and contains expected output.
-	cssOutput, err := os.ReadFile(filepath.Join(root, ".rstf", "static", "main.css"))
+	cssOutput, err := os.ReadFile(filepath.Join(root, "rstf", "static", "main.css"))
 	require.NoError(t, err)
 	cssStr := string(cssOutput)
 
@@ -228,13 +228,13 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 
 	// Step 5: Build and start the generated server.
 	port := freePort(t)
-	build := exec.Command("go", "build", "-o", filepath.Join(root, ".rstf", "server"), "./.rstf/server_gen.go")
+	build := exec.Command("go", "build", "-o", filepath.Join(root, "rstf", "server"), "./rstf/server_gen.go")
 	build.Dir = root
 	if out, err := build.CombinedOutput(); err != nil {
 		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
 	}
 
-	server := exec.Command(filepath.Join(root, ".rstf", "server"), "--port", port)
+	server := exec.Command(filepath.Join(root, "rstf", "server"), "--port", port)
 	server.Dir = root
 	server.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	require.NoError(t, server.Start())
@@ -253,10 +253,10 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 	require.NoError(t, err)
 	htmlStr := string(htmlBytes)
 
-	assert.Contains(t, htmlStr, `<link rel="stylesheet" href="/.rstf/static/main.css">`)
+	assert.Contains(t, htmlStr, `<link rel="stylesheet" href="/rstf/static/main.css">`)
 
 	// Step 7: Verify the CSS file is served by the static handler.
-	cssResp, err := http.Get(baseURL + "/.rstf/static/main.css")
+	cssResp, err := http.Get(baseURL + "/rstf/static/main.css")
 	require.NoError(t, err)
 	defer cssResp.Body.Close()
 	require.Equal(t, 200, cssResp.StatusCode)

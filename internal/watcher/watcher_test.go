@@ -90,7 +90,7 @@ func TestIgnoredDirectories(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create ignored directories before starting the watcher.
-	for _, name := range []string{".rstf", ".git", "node_modules"} {
+	for _, name := range []string{"rstf", ".git", "node_modules"} {
 		os.MkdirAll(filepath.Join(dir, name), 0755)
 	}
 
@@ -100,7 +100,7 @@ func TestIgnoredDirectories(t *testing.T) {
 	defer w.Stop()
 
 	// Write .go files inside ignored directories.
-	for _, name := range []string{".rstf", ".git", "node_modules"} {
+	for _, name := range []string{"rstf", ".git", "node_modules"} {
 		path := filepath.Join(dir, name, "file.go")
 		os.WriteFile(path, []byte("package x"), 0644)
 	}

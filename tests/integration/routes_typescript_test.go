@@ -16,7 +16,7 @@ func TestTypeSafeRoutesTypeScript(t *testing.T) {
 
 	_, err := codegen.Generate(root)
 	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
+	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
 
 	tscPath, ok := lookupTSC()
 	if !ok {
@@ -35,15 +35,15 @@ func TestTypeSafeRoutesTypeScript(t *testing.T) {
     "baseUrl": ".",
     "types": [],
     "paths": {
-      "@rstf/*": ["./.rstf/generated/*"]
+      "@rstf/*": ["./rstf/generated/*"]
     }
   },
   "include": [
     "routes/typesafe-routes.ts",
     "routes/typesafe-rpc.ts",
-    ".rstf/generated/client.ts",
-    ".rstf/generated/routes.ts",
-    ".rstf/types/**/*.d.ts"
+    "rstf/generated/client.ts",
+    "rstf/generated/routes.ts",
+    "rstf/types/**/*.d.ts"
   ]
 }
 `), 0644)

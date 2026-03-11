@@ -167,7 +167,7 @@ func shouldIgnoreDir(appRoot, path string) bool {
 		return true
 	}
 
-	if name == "node_modules" {
+	if name == "node_modules" || name == "rstf" {
 		return true
 	}
 

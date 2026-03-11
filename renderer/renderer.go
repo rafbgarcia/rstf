@@ -3,18 +3,21 @@ package renderer
 import (
 	"bufio"
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+//go:embed ssr.ts
+var ssrRuntimeSource []byte
 
 type Renderer struct {
 	port int
@@ -27,12 +30,18 @@ func New() *Renderer {
 
 // Start spawns the Node sidecar process and waits for it to report its port.
 func (r *Renderer) Start(projectRoot string) error {
-	ssrPath := filepath.Join(frameworkRoot(), "runtime", "ssr.ts")
-	loaderPath := filepath.Join(frameworkRoot(), "node_modules", "tsx", "dist", "loader.mjs")
-
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return fmt.Errorf("renderer: resolve project root: %w", err)
+	}
+
+	ssrPath, err := ensureProjectRuntime(absRoot)
+	if err != nil {
+		return err
+	}
+	loaderPath, err := resolveProjectTSXLoader(absRoot)
+	if err != nil {
+		return err
 	}
 
 	r.cmd = exec.Command("node", "--import", loaderPath, ssrPath, "--project-root", absRoot)
@@ -70,7 +79,7 @@ func (r *Renderer) Start(projectRoot string) error {
 	case port := <-portCh:
 		r.port = port
 		// Write port to file so the CLI watcher can invalidate the sidecar cache.
-		os.WriteFile(filepath.Join(absRoot, ".rstf", "sidecar.port"), []byte(strconv.Itoa(port)), 0644)
+		os.WriteFile(filepath.Join(absRoot, "rstf", "sidecar.port"), []byte(strconv.Itoa(port)), 0644)
 	case err := <-errCh:
 		r.cmd.Process.Kill()
 		return err
@@ -80,6 +89,35 @@ func (r *Renderer) Start(projectRoot string) error {
 	}
 
 	return nil
+}
+
+func ensureProjectRuntime(projectRoot string) (string, error) {
+	runtimeDir := filepath.Join(projectRoot, "rstf", "runtime")
+	if err := os.MkdirAll(runtimeDir, 0755); err != nil {
+		return "", fmt.Errorf("renderer: create runtime dir: %w", err)
+	}
+
+	ssrPath := filepath.Join(runtimeDir, "ssr.ts")
+	if err := os.WriteFile(ssrPath, ssrRuntimeSource, 0644); err != nil {
+		return "", fmt.Errorf("renderer: write ssr runtime: %w", err)
+	}
+
+	return ssrPath, nil
+}
+
+func resolveProjectTSXLoader(projectRoot string) (string, error) {
+	loaderPath := filepath.Join(projectRoot, "node_modules", "tsx", "dist", "loader.mjs")
+	if _, err := os.Stat(loaderPath); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf(
+				"renderer: missing app runtime dependency \"tsx\" at %s; run npm install in %s",
+				loaderPath,
+				projectRoot,
+			)
+		}
+		return "", fmt.Errorf("renderer: stat tsx loader: %w", err)
+	}
+	return loaderPath, nil
 }
 
 // Stop sends SIGINT to the sidecar and waits for it to exit.
@@ -153,13 +191,4 @@ func (r *Renderer) Render(req RenderRequest) (string, error) {
 	}
 
 	return result.HTML, nil
-}
-
-// frameworkRoot returns the root directory of the rstf framework module,
-// derived from the location of this source file.
-func frameworkRoot() string {
-	_, filename, _, _ := runtime.Caller(0)
-	// filename is .../renderer/renderer.go
-	// framework root is one directory up
-	return filepath.Dir(filepath.Dir(filename))
 }

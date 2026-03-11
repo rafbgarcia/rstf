@@ -10,7 +10,7 @@ import (
 
 // BundleEntries bundles all hydration entry files into client-side JS bundles
 // using esbuild's Go API (single in-process call, no child processes).
-// Each entry produces .rstf/static/{name}/bundle.js.
+// Each entry produces rstf/static/{name}/bundle.js.
 //
 // projectRoot is the path to the project directory (resolved to absolute).
 // entries maps routeDir -> absolute path to .entry.tsx file.
@@ -37,7 +37,7 @@ func BundleEntries(projectRoot string, entries map[string]string) error {
 	result := api.Build(api.BuildOptions{
 		EntryPointsAdvanced: entryPoints,
 		Bundle:              true,
-		Outdir:              filepath.Join(absRoot, ".rstf", "static"),
+		Outdir:              filepath.Join(absRoot, "rstf", "static"),
 		Platform:            api.PlatformBrowser,
 		JSX:                 api.JSXAutomatic,
 		AbsWorkingDir:       absRoot,
