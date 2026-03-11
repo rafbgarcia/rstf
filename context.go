@@ -24,6 +24,14 @@ func NewContext(r *http.Request) *Context {
 	}
 }
 
+// Param returns a path parameter value from the current request.
+func (c *Context) Param(name string) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	return c.Request.PathValue(name)
+}
+
 // SetRequestBodyLimitBytes sets the maximum request body size accepted by BindJSON.
 func (c *Context) SetRequestBodyLimitBytes(limit int64) error {
 	if limit <= 0 {

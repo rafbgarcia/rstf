@@ -29,6 +29,7 @@ func TestTypeSafeRoutesTypeScript(t *testing.T) {
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "node",
+    "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
     "baseUrl": ".",
@@ -37,7 +38,13 @@ func TestTypeSafeRoutesTypeScript(t *testing.T) {
       "@rstf/*": ["./.rstf/generated/*"]
     }
   },
-  "include": ["routes/typesafe-routes.ts", ".rstf/generated/routes.ts"]
+  "include": [
+    "routes/typesafe-routes.ts",
+    "routes/typesafe-rpc.ts",
+    ".rstf/generated/client.ts",
+    ".rstf/generated/routes.ts",
+    ".rstf/types/**/*.d.ts"
+  ]
 }
 `), 0644)
 	require.NoError(t, err)

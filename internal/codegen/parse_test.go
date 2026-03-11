@@ -191,6 +191,68 @@ func SSR(ctx *rstf.Context) Session {
 	assert.True(t, routes[0].HasOnServerStart, "expected HasOnServerStart=true when OnServerStart(*rstf.App) is exported")
 }
 
+func TestParseDirDetectsRPCFunctions(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "routes", "chat.$id", "index.go"), `
+package chat
+
+import rstf "github.com/rafbgarcia/rstf"
+
+type Message struct {
+	Body string `+"`json:\"body\"`"+`
+}
+
+type GetMessagesResult struct {
+	Messages []Message `+"`json:\"messages\"`"+`
+}
+
+type SendMessageInput struct {
+	Body string `+"`json:\"body\"`"+`
+}
+
+func GetMessages(ctx *rstf.QueryContext) (GetMessagesResult, error) {
+	return GetMessagesResult{}, nil
+}
+
+func SendMessage(ctx *rstf.MutationContext, input SendMessageInput) error {
+	return nil
+}
+
+func NotifySlack(ctx *rstf.ActionContext, input string) (string, error) {
+	return input, nil
+}
+`)
+
+	routes, err := ParseDir(dir)
+	require.NoError(t, err)
+	require.Len(t, routes, 1)
+	require.Len(t, routes[0].Funcs, 3)
+
+	assert.Contains(t, routes[0].Funcs, RouteFunc{
+		Name:         "GetMessages",
+		Kind:         RouteFuncKindQuery,
+		ReturnType:   "GetMessagesResult",
+		ReturnsError: true,
+		HasContext:   true,
+	})
+	assert.Contains(t, routes[0].Funcs, RouteFunc{
+		Name:         "SendMessage",
+		Kind:         RouteFuncKindMutation,
+		InputType:    "SendMessageInput",
+		ReturnsError: true,
+		HasContext:   true,
+	})
+	assert.Contains(t, routes[0].Funcs, RouteFunc{
+		Name:         "NotifySlack",
+		Kind:         RouteFuncKindAction,
+		InputType:    "string",
+		ReturnType:   "string",
+		ReturnsError: true,
+		HasContext:   true,
+	})
+	assert.Len(t, routes[0].Structs, 3)
+}
+
 func TestParseDirOnServerStartWithAlias(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "myapp", "main.go"), `

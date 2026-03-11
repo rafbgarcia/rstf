@@ -22,11 +22,26 @@ import (
 	"github.com/rafbgarcia/rstf/internal/conventions"
 )
 
-// RouteFunc represents a parsed route handler function (e.g. SSR).
+type RouteFuncKind string
+
+const (
+	RouteFuncKindSSR      RouteFuncKind = "ssr"
+	RouteFuncKindHTTP     RouteFuncKind = "http"
+	RouteFuncKindQuery    RouteFuncKind = "query"
+	RouteFuncKindMutation RouteFuncKind = "mutation"
+	RouteFuncKindAction   RouteFuncKind = "action"
+)
+
+// RouteFunc represents a parsed route handler function (e.g. SSR, GET, Query).
 type RouteFunc struct {
-	Name       string // Function name: "SSR", "GET", "POST", etc.
-	ReturnType string // Name of the return struct (SSR only, e.g. "ServerData")
-	HasContext bool   // Whether the function accepts a *rstf.Context parameter
+	Name          string        // Function name: "SSR", "GET", "POST", etc.
+	Kind          RouteFuncKind // Function kind.
+	ReturnType    string        // Go return type name (e.g. "ServerData" or "string").
+	ReturnIsSlice bool          // Whether the return type is a slice.
+	ReturnsError  bool          // Whether the function returns an error.
+	InputType     string        // Go input type name for mutations/actions.
+	InputIsSlice  bool          // Whether the input type is a slice.
+	HasContext    bool          // Whether the function accepts a context parameter.
 }
 
 // StructDef represents a parsed Go struct and its fields.
@@ -53,7 +68,7 @@ type RouteFile struct {
 }
 
 // routeFuncNames are the exported function names the framework recognizes.
-var routeFuncNames = map[string]bool{
+var httpRouteFuncNames = map[string]bool{
 	"SSR":    true,
 	"GET":    true,
 	"POST":   true,
@@ -181,9 +196,6 @@ func parseRouteDir(rootDir, dir string, files []string) (*RouteFile, error) {
 				hasAroundRequest = true
 				continue
 			}
-			if !routeFuncNames[fn.Name.Name] {
-				continue
-			}
 			rf, refs := parseRouteFunc(fn)
 			if rf != nil {
 				funcs = append(funcs, *rf)
@@ -224,7 +236,13 @@ func parseRouteFunc(fn *ast.FuncDecl) (*RouteFunc, []string) {
 	if fn.Name.Name == "SSR" {
 		return parseSSRFunc(fn)
 	}
-	return parseActionFunc(fn), nil
+	if httpRouteFuncNames[fn.Name.Name] {
+		return parseHTTPFunc(fn), nil
+	}
+	if !ast.IsExported(fn.Name.Name) {
+		return nil, nil
+	}
+	return parseRPCFunc(fn)
 }
 
 func parseSSRFunc(fn *ast.FuncDecl) (*RouteFunc, []string) {
@@ -246,12 +264,13 @@ func parseSSRFunc(fn *ast.FuncDecl) (*RouteFunc, []string) {
 
 	return &RouteFunc{
 		Name:       fn.Name.Name,
+		Kind:       RouteFuncKindSSR,
 		ReturnType: typeName,
 		HasContext: hasContext,
 	}, []string{typeName}
 }
 
-func parseActionFunc(fn *ast.FuncDecl) *RouteFunc {
+func parseHTTPFunc(fn *ast.FuncDecl) *RouteFunc {
 	// Must have exactly one *Context parameter.
 	if fn.Type.Params == nil || len(fn.Type.Params.List) != 1 {
 		return nil
@@ -271,8 +290,65 @@ func parseActionFunc(fn *ast.FuncDecl) *RouteFunc {
 
 	return &RouteFunc{
 		Name:       fn.Name.Name,
+		Kind:       RouteFuncKindHTTP,
 		HasContext: true,
 	}
+}
+
+func parseRPCFunc(fn *ast.FuncDecl) (*RouteFunc, []string) {
+	if fn.Type.Params == nil || len(fn.Type.Params.List) == 0 || len(fn.Type.Params.List) > 2 {
+		return nil, nil
+	}
+
+	contextType := contextTypeName(fn.Type.Params.List[0].Type)
+	if contextType == "" {
+		return nil, nil
+	}
+
+	kind := rpcFuncKindForContext(contextType)
+	if kind == "" {
+		return nil, nil
+	}
+
+	rf := &RouteFunc{
+		Name:       fn.Name.Name,
+		Kind:       kind,
+		HasContext: true,
+	}
+
+	var refs []string
+
+	if len(fn.Type.Params.List) == 2 {
+		if kind == RouteFuncKindQuery {
+			return nil, nil
+		}
+		inputName, inputIsSlice := resolveType(fn.Type.Params.List[1].Type)
+		if inputName == "" {
+			return nil, nil
+		}
+		rf.InputType = inputName
+		rf.InputIsSlice = inputIsSlice
+		if !isPrimitiveGoType(inputName) {
+			refs = append(refs, inputName)
+		}
+	}
+
+	returnName, returnIsSlice, hasError := parseRPCResults(fn.Type.Results)
+	if kind == RouteFuncKindQuery && returnName == "" {
+		return nil, nil
+	}
+	if fn.Type.Results == nil || (returnName == "" && !hasError) {
+		return nil, nil
+	}
+
+	rf.ReturnType = returnName
+	rf.ReturnIsSlice = returnIsSlice
+	rf.ReturnsError = hasError
+	if returnName != "" && !isPrimitiveGoType(returnName) {
+		refs = append(refs, returnName)
+	}
+
+	return rf, refs
 }
 
 // isContextParam checks if a type expression is *<pkg>.Context.
@@ -287,6 +363,57 @@ func isContextParam(expr ast.Expr) bool {
 		return false
 	}
 	return sel.Sel.Name == "Context"
+}
+
+func contextTypeName(expr ast.Expr) string {
+	star, ok := expr.(*ast.StarExpr)
+	if !ok {
+		return ""
+	}
+	sel, ok := star.X.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	return sel.Sel.Name
+}
+
+func rpcFuncKindForContext(name string) RouteFuncKind {
+	switch name {
+	case "QueryContext":
+		return RouteFuncKindQuery
+	case "MutationContext":
+		return RouteFuncKindMutation
+	case "ActionContext":
+		return RouteFuncKindAction
+	default:
+		return ""
+	}
+}
+
+func parseRPCResults(results *ast.FieldList) (typeName string, isSlice bool, hasError bool) {
+	if results == nil || len(results.List) == 0 || len(results.List) > 2 {
+		return "", false, false
+	}
+
+	if len(results.List) == 1 {
+		if ident, ok := results.List[0].Type.(*ast.Ident); ok && ident.Name == "error" {
+			return "", false, true
+		}
+		typeName, isSlice = resolveType(results.List[0].Type)
+		return typeName, isSlice, false
+	}
+
+	typeName, isSlice = resolveType(results.List[0].Type)
+	if typeName == "" {
+		return "", false, false
+	}
+
+	ident, ok := results.List[1].Type.(*ast.Ident)
+	if !ok || ident.Name != "error" {
+		return "", false, false
+	}
+
+	return typeName, isSlice, true
 }
 
 // isOnServerStartFunc checks if a function declaration matches func OnServerStart(*<pkg>.App).

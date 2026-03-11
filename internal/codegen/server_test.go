@@ -387,7 +387,8 @@ func TestGenerateServer_WithOnServerStart(t *testing.T) {
 		"rstfApp := rstf.NewApp()",
 		"app.OnServerStart(rstfApp)",
 		"defer rstfApp.Close()",
-		"rt.Use(rstf.NewAdmissionMiddleware",
+		"admissionMiddleware := rstf.NewAdmissionMiddleware",
+		`strings.HasPrefix(req.URL.Path, "/__rstf/live")`,
 		// DB wiring in handler.
 		"ctx.DB = rstfApp.DB()",
 		"ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes())",
@@ -430,7 +431,8 @@ func TestGenerateServer_WithoutOnServerStart(t *testing.T) {
 	required := []string{
 		"rstfApp := rstf.NewApp()",
 		"defer rstfApp.Close()",
-		"rt.Use(rstf.NewAdmissionMiddleware",
+		"admissionMiddleware := rstf.NewAdmissionMiddleware",
+		`strings.HasPrefix(req.URL.Path, "/__rstf/live")`,
 		"ctx.DB = rstfApp.DB()",
 		"ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes())",
 	}
@@ -495,7 +497,8 @@ func TestGenerateServer_WithAroundRequest(t *testing.T) {
 
 	expectations := []string{
 		"rstfApp := rstf.NewApp()",
-		"rt.Use(rstf.NewAdmissionMiddleware",
+		"admissionMiddleware := rstf.NewAdmissionMiddleware",
+		`strings.HasPrefix(req.URL.Path, "/__rstf/live")`,
 		"app.AroundRequest()",
 		"rt.Use(mw)",
 	}
@@ -536,7 +539,8 @@ func TestGenerateServer_WithBothConventions(t *testing.T) {
 		"rstfApp := rstf.NewApp()",
 		"app.OnServerStart(rstfApp)",
 		"defer rstfApp.Close()",
-		"rt.Use(rstf.NewAdmissionMiddleware",
+		"admissionMiddleware := rstf.NewAdmissionMiddleware",
+		`strings.HasPrefix(req.URL.Path, "/__rstf/live")`,
 		"ctx.DB = rstfApp.DB()",
 		"ctx.SetRequestBodyLimitBytes(rstfApp.RequestBodyLimitBytes())",
 		// AroundRequest

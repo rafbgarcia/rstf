@@ -1,12 +1,14 @@
 package integration_test
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -89,6 +91,82 @@ func TestHydration(t *testing.T) {
 		}
 		return text == "Count: 1"
 	}, 5*time.Second, 100*time.Millisecond)
+}
+
+func TestLiveQueryUpdatesAcrossClients(t *testing.T) {
+	root := testProjectRoot()
+
+	result, err := codegen.Generate(root)
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
+
+	require.NoError(t, bundler.BundleEntries(root, result.Entries))
+
+	port := freePort(t)
+	build := exec.Command("go", "build", "-o", filepath.Join(root, ".rstf", "server"), "./.rstf/server_gen.go")
+	build.Dir = root
+	if out, err := build.CombinedOutput(); err != nil {
+		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
+	}
+
+	server := exec.Command(filepath.Join(root, ".rstf", "server"), "--port", port)
+	server.Dir = root
+	server.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	require.NoError(t, server.Start())
+	t.Cleanup(func() {
+		stopProcessGroup(t, server, 1*time.Second)
+	})
+
+	baseURL := fmt.Sprintf("http://localhost:%s", port)
+	waitForServer(t, baseURL+"/live-chat/room-1", 10*time.Second)
+
+	u := launcher.New().Headless(true).MustLaunch()
+	browser := rod.New().ControlURL(u).MustConnect()
+	t.Cleanup(func() { browser.MustClose() })
+
+	pageA := browser.MustPage("about:blank")
+	pageA.MustSetExtraHeaders("Accept", "text/html")
+	pageA.MustNavigate(baseURL + "/live-chat/room-1")
+	pageA = pageA.Timeout(15 * time.Second)
+	pageA.MustWaitStable()
+
+	pageB := browser.MustPage("about:blank")
+	pageB.MustSetExtraHeaders("Accept", "text/html")
+	pageB.MustNavigate(baseURL + "/live-chat/room-1")
+	pageB = pageB.Timeout(15 * time.Second)
+	pageB.MustWaitStable()
+
+	require.Eventually(t, func() bool {
+		el, err := pageA.Element("[data-testid=messages-list]")
+		if err != nil {
+			return false
+		}
+		text, err := el.Text()
+		return err == nil && strings.Contains(text, "Hello from the server")
+	}, 5*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool {
+		el, err := pageB.Element("[data-testid=messages-list]")
+		if err != nil {
+			return false
+		}
+		text, err := el.Text()
+		return err == nil && strings.Contains(text, "Hello from the server")
+	}, 5*time.Second, 100*time.Millisecond)
+
+	reqBody := bytes.NewBufferString(`{"kind":"mutation","route":"live-chat.$id","name":"SendMessage","params":{"id":"room-1"},"input":{"body":"Second message"}}`)
+	resp, err := http.Post(baseURL+"/__rstf/rpc", "application/json", reqBody)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	require.Eventually(t, func() bool {
+		el, err := pageB.Element("[data-testid=messages-list]")
+		if err != nil {
+			return false
+		}
+		text, err := el.Text()
+		return err == nil && strings.Contains(text, "Second message")
+	}, 10*time.Second, 100*time.Millisecond)
 }
 
 // TestCSS verifies the full CSS pipeline: PostCSS/Tailwind processing, static

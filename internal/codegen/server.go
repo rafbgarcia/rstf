@@ -17,6 +17,7 @@ type serverImport struct {
 	ImportPath string // full import path
 	Dir        string // project-relative dir (e.g. ".", "routes/dashboard")
 	HasContext bool   // whether SSR() takes *rstf.Context
+	HasSSR     bool   // whether the package exports SSR.
 }
 
 // routeEntry pairs a route directory with its computed URL pattern and handlers.
@@ -31,6 +32,7 @@ type routeEntry struct {
 	hasPATCH      bool
 	hasDELETE     bool
 	ssrHasContext bool
+	rpcFuncs      []RouteFunc
 }
 
 // GenerateServer produces the content of .rstf/server_gen.go — the Go entry
@@ -76,6 +78,10 @@ func GenerateServer(modulePath string, files []RouteFile, deps map[string][]stri
 			case "DELETE":
 				e.hasDELETE = true
 			}
+			switch fn.Kind {
+			case RouteFuncKindQuery, RouteFuncKindMutation, RouteFuncKindAction:
+				e.rpcFuncs = append(e.rpcFuncs, fn)
+			}
 		}
 		routeMap[f.Dir] = e
 	}
@@ -115,6 +121,8 @@ func GenerateServer(modulePath string, files []RouteFile, deps map[string][]stri
 	writeStructToMap(&b)
 	writeAssemblePage(&b)
 	writeRequestHelpers(&b)
+	writeRPCHelpers(&b)
+	writeRPCDispatchers(&b, routes, aliasMap)
 	writeResponseHelpers(&b)
 	writeMain(&b, routes, layout, hasLayout, aliasMap, deps)
 	return b.String(), nil
@@ -165,8 +173,10 @@ func collectImports(
 		usedAliases[baseAlias]++
 
 		hasCtx := false
+		hasSSR := false
 		for _, fn := range rf.Funcs {
 			if fn.Name == "SSR" {
+				hasSSR = true
 				hasCtx = fn.HasContext
 				break
 			}
@@ -177,6 +187,7 @@ func collectImports(
 			ImportPath: importPath,
 			Dir:        dir,
 			HasContext: hasCtx,
+			HasSSR:     hasSSR,
 		})
 	}
 
@@ -201,9 +212,11 @@ func writeHeader(b *strings.Builder) {
 
 func writeImports(b *strings.Builder, imports []serverImport) {
 	b.WriteString("import (\n")
+	b.WriteString("\t\"context\"\n")
 	b.WriteString("\t\"encoding/json\"\n")
 	b.WriteString("\t\"flag\"\n")
 	b.WriteString("\t\"fmt\"\n")
+	b.WriteString("\t\"io\"\n")
 	b.WriteString("\t\"mime\"\n")
 	b.WriteString("\t\"net/http\"\n")
 	b.WriteString("\t\"os\"\n")
@@ -359,6 +372,81 @@ func invokeRouteAction(
 	b.WriteString("\n")
 }
 
+func writeRPCHelpers(b *strings.Builder) {
+	b.WriteString(`type rpcRequest struct {
+	Kind   string          ` + "`json:\"kind\"`" + `
+	Route  string          ` + "`json:\"route\"`" + `
+	Name   string          ` + "`json:\"name\"`" + `
+	Params map[string]string ` + "`json:\"params\"`" + `
+	Input  json.RawMessage ` + "`json:\"input\"`" + `
+}
+
+type liveSubscribeRequest struct {
+	ClientID       string            ` + "`json:\"clientId\"`" + `
+	SubscriptionID string            ` + "`json:\"subscriptionId\"`" + `
+	Route          string            ` + "`json:\"route\"`" + `
+	Name           string            ` + "`json:\"name\"`" + `
+	Params         map[string]string ` + "`json:\"params\"`" + `
+}
+
+type liveUnsubscribeRequest struct {
+	ClientID       string ` + "`json:\"clientId\"`" + `
+	SubscriptionID string ` + "`json:\"subscriptionId\"`" + `
+}
+
+func decodeJSONBody(req *http.Request, target any) error {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return err
+	}
+	if len(body) == 0 {
+		return &rstf.RequestError{
+			Code:    rstf.ErrorCodeInvalidPayload,
+			Message: "request body must not be empty",
+			Status:  http.StatusBadRequest,
+		}
+	}
+	if err := json.Unmarshal(body, target); err != nil {
+		return &rstf.RequestError{
+			Code:    rstf.ErrorCodeInvalidPayload,
+			Message: "request body must contain valid JSON",
+			Status:  http.StatusBadRequest,
+		}
+	}
+	return nil
+}
+
+func cloneRequestWithParams(req *http.Request, params map[string]string) *http.Request {
+	cloned := req.Clone(context.Background())
+	cloned.Body = http.NoBody
+	for key, value := range params {
+		cloned.SetPathValue(key, value)
+	}
+	return cloned
+}
+
+func writeRPCSuccess(w http.ResponseWriter, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"data": payload})
+}
+
+func writeSSE(w http.ResponseWriter, event rstf.LiveEvent) error {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
+		return err
+	}
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+	return nil
+}
+`)
+	b.WriteString("\n")
+}
+
 func writeResponseHelpers(b *strings.Builder) {
 	b.WriteString(`func writeOptions(w http.ResponseWriter, methods []string) {
 	w.Header().Set("Allow", allowHeader(methods))
@@ -380,6 +468,172 @@ func writeHTMLResponse(w http.ResponseWriter, page string, head bool) {
 }
 `)
 	b.WriteString("\n")
+}
+
+func writeRPCDispatchers(b *strings.Builder, routes []routeEntry, aliasMap map[string]serverImport) {
+	writeExecuteQuery(b, routes, aliasMap)
+	writeExecuteMutationOrAction(b, routes, aliasMap)
+}
+
+func writeExecuteQuery(b *strings.Builder, routes []routeEntry, aliasMap map[string]serverImport) {
+	b.WriteString(`func executeQuery(req *http.Request, rstfApp *rstf.App, routeName string, fnName string, params map[string]string) (any, error) {
+	switch routeName {
+`)
+	for _, route := range routes {
+		queryFuncs := rpcFuncsByKind(route.rpcFuncs, RouteFuncKindQuery)
+		if len(queryFuncs) == 0 {
+			continue
+		}
+		alias := aliasMap[route.dir].Alias
+		fmt.Fprintf(b, "\tcase %q:\n", routeNameForDir(route.dir))
+		b.WriteString("\t\tswitch fnName {\n")
+		for _, fn := range queryFuncs {
+			fmt.Fprintf(b, "\t\tcase %q:\n", fn.Name)
+			b.WriteString("\t\t\tctx := rstf.NewQueryContext(cloneRequestWithParams(req, params), rstfApp.DB(), rstfApp.RequestBodyLimitBytes())\n")
+			if returnsErrorOnly(fn) {
+				fmt.Fprintf(b, "\t\t\tif err := %s.%s(ctx); err != nil {\n", alias, fn.Name)
+				b.WriteString("\t\t\t\treturn nil, err\n")
+				b.WriteString("\t\t\t}\n")
+				b.WriteString("\t\t\treturn nil, nil\n")
+			} else if returnsDataAndError(fn) {
+				fmt.Fprintf(b, "\t\t\treturn %s.%s(ctx)\n", alias, fn.Name)
+			} else {
+				fmt.Fprintf(b, "\t\t\treturn %s.%s(ctx), nil\n", alias, fn.Name)
+			}
+		}
+		b.WriteString("\t\t}\n")
+	}
+	b.WriteString(`	}
+	return nil, &rstf.RequestError{
+		Code:    rstf.ErrorCodeInvalidPayload,
+		Message: "unknown query",
+		Status:  http.StatusNotFound,
+	}
+}
+
+`)
+}
+
+func writeExecuteMutationOrAction(b *strings.Builder, routes []routeEntry, aliasMap map[string]serverImport) {
+	b.WriteString(`func executeMutationOrAction(
+	req *http.Request,
+	rstfApp *rstf.App,
+	routeName string,
+	fnName string,
+	kind string,
+	params map[string]string,
+	input json.RawMessage,
+	liveHub *rstf.LiveHub,
+) (any, error) {
+	switch routeName {
+`)
+	for _, route := range routes {
+		rpcFuncs := rpcFuncsByKinds(route.rpcFuncs, RouteFuncKindMutation, RouteFuncKindAction)
+		if len(rpcFuncs) == 0 {
+			continue
+		}
+		alias := aliasMap[route.dir].Alias
+		fmt.Fprintf(b, "\tcase %q:\n", routeNameForDir(route.dir))
+		b.WriteString("\t\tswitch fnName {\n")
+		for _, fn := range rpcFuncs {
+			fmt.Fprintf(b, "\t\tcase %q:\n", fn.Name)
+			fmt.Fprintf(b, "\t\t\tif kind != %q {\n", fn.Kind)
+			b.WriteString("\t\t\t\treturn nil, &rstf.RequestError{Code: rstf.ErrorCodeInvalidPayload, Message: \"rpc kind mismatch\", Status: http.StatusBadRequest}\n")
+			b.WriteString("\t\t\t}\n")
+			if fn.Kind == RouteFuncKindMutation {
+				b.WriteString("\t\t\tctx := rstf.NewMutationContext(cloneRequestWithParams(req, params), rstfApp.DB(), rstfApp.RequestBodyLimitBytes(), liveHub.Invalidate)\n")
+			} else {
+				b.WriteString("\t\t\tctx := rstf.NewActionContext(cloneRequestWithParams(req, params), rstfApp.RequestBodyLimitBytes())\n")
+			}
+			writeInputDecodeBlock(b, fn, alias)
+			switch {
+			case returnsErrorOnly(fn):
+				fmt.Fprintf(b, "\t\t\tif err := %s.%s(ctx%s); err != nil {\n", alias, fn.Name, callInputSuffix(fn))
+				b.WriteString("\t\t\t\treturn nil, err\n")
+				b.WriteString("\t\t\t}\n")
+				b.WriteString("\t\t\treturn nil, nil\n")
+			case returnsDataAndError(fn):
+				fmt.Fprintf(b, "\t\t\treturn %s.%s(ctx%s)\n", alias, fn.Name, callInputSuffix(fn))
+			default:
+				fmt.Fprintf(b, "\t\t\treturn %s.%s(ctx%s), nil\n", alias, fn.Name, callInputSuffix(fn))
+			}
+		}
+		b.WriteString("\t\t}\n")
+	}
+	b.WriteString(`	}
+	return nil, &rstf.RequestError{
+		Code:    rstf.ErrorCodeInvalidPayload,
+		Message: "unknown rpc function",
+		Status:  http.StatusNotFound,
+	}
+}
+
+`)
+}
+
+func writeInputDecodeBlock(b *strings.Builder, fn RouteFunc, alias string) {
+	if fn.InputType == "" {
+		return
+	}
+	fmt.Fprintf(b, "\t\t\tvar inputValue %s\n", fnInputGoType(fn, alias))
+	b.WriteString("\t\t\tif len(input) == 0 {\n")
+	b.WriteString("\t\t\t\treturn nil, &rstf.RequestError{Code: rstf.ErrorCodeInvalidPayload, Message: \"input is required\", Status: http.StatusBadRequest}\n")
+	b.WriteString("\t\t\t}\n")
+	b.WriteString("\t\t\tif err := json.Unmarshal(input, &inputValue); err != nil {\n")
+	b.WriteString("\t\t\t\treturn nil, &rstf.RequestError{Code: rstf.ErrorCodeInvalidPayload, Message: \"invalid rpc input\", Status: http.StatusBadRequest}\n")
+	b.WriteString("\t\t\t}\n")
+}
+
+func callInputSuffix(fn RouteFunc) string {
+	if fn.InputType == "" {
+		return ""
+	}
+	return ", inputValue"
+}
+
+func fnInputGoType(fn RouteFunc, alias string) string {
+	if fn.InputType == "" {
+		return ""
+	}
+	name := fn.InputType
+	if !isPrimitiveGoType(fn.InputType) {
+		name = alias + "." + name
+	}
+	if fn.InputIsSlice {
+		return "[]" + name
+	}
+	return name
+}
+
+func returnsErrorOnly(fn RouteFunc) bool {
+	return fn.ReturnType == "" && fn.ReturnsError
+}
+
+func returnsDataAndError(fn RouteFunc) bool {
+	return fn.ReturnType != "" && fn.ReturnsError
+}
+
+func rpcFuncsByKind(funcs []RouteFunc, kind RouteFuncKind) []RouteFunc {
+	var result []RouteFunc
+	for _, fn := range funcs {
+		if fn.Kind == kind {
+			result = append(result, fn)
+		}
+	}
+	return result
+}
+
+func rpcFuncsByKinds(funcs []RouteFunc, kinds ...RouteFuncKind) []RouteFunc {
+	var result []RouteFunc
+	for _, fn := range funcs {
+		for _, kind := range kinds {
+			if fn.Kind == kind {
+				result = append(result, fn)
+				break
+			}
+		}
+	}
+	return result
 }
 
 func writeMain(
@@ -434,11 +688,21 @@ func writeMain(
 	}()
 
 	rt := router.New()
-	rt.Use(rstf.NewAdmissionMiddleware(rstf.AdmissionControlConfig{
+	admissionMiddleware := rstf.NewAdmissionMiddleware(rstf.AdmissionControlConfig{
 		MaxConcurrentRequests: rstfApp.MaxConcurrentRequests(),
 		MaxQueuedRequests:     rstfApp.MaxQueuedRequests(),
 		QueueTimeout:          rstfApp.QueueTimeout(),
-	}))
+	})
+	rt.Use(func(next http.Handler) http.Handler {
+		admitted := admissionMiddleware(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if strings.HasPrefix(req.URL.Path, "/__rstf/live") {
+				next.ServeHTTP(w, req)
+				return
+			}
+			admitted.ServeHTTP(w, req)
+		})
+	})
 `)
 
 	if hasAroundRequest {
@@ -457,6 +721,105 @@ func writeMain(
 	if _, err := os.Stat(".rstf/static/main.css"); err == nil {
 		cssPath = "/.rstf/static/main.css"
 	}
+
+	liveHub := rstf.NewLiveHub()
+
+	rt.Handle("/__rstf/live", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			methodNotAllowed(w, []string{http.MethodGet})
+			return
+		}
+		clientID := strings.TrimSpace(req.URL.Query().Get("clientId"))
+		if clientID == "" {
+			writeNotAcceptable(w)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		events, disconnect := liveHub.Connect(clientID)
+		defer disconnect()
+
+		go liveHub.Replay(clientID)
+
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+
+		for {
+			select {
+			case <-req.Context().Done():
+				return
+			case event, ok := <-events:
+				if !ok {
+					return
+				}
+				if err := writeSSE(w, event); err != nil {
+					return
+				}
+			}
+		}
+	}))
+
+	rt.Handle("/__rstf/live/subscribe", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			methodNotAllowed(w, []string{http.MethodPost})
+			return
+		}
+		var payload liveSubscribeRequest
+		if err := decodeJSONBody(req, &payload); err != nil {
+			rstf.WriteErrorEnvelope(w, err)
+			return
+		}
+		key := rstf.NewSubscriptionKey(payload.Route, payload.Name, payload.Params)
+		liveHub.Register(&rstf.LiveSubscription{
+			ClientID:       payload.ClientID,
+			SubscriptionID: payload.SubscriptionID,
+			Key:            key,
+			Execute: func() (any, error) {
+				return executeQuery(req, rstfApp, payload.Route, payload.Name, payload.Params)
+			},
+		})
+		result, err := executeQuery(req, rstfApp, payload.Route, payload.Name, payload.Params)
+		if err != nil {
+			rstf.WriteErrorEnvelope(w, err)
+			return
+		}
+		writeRPCSuccess(w, result)
+	}))
+
+	rt.Handle("/__rstf/live/unsubscribe", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			methodNotAllowed(w, []string{http.MethodPost})
+			return
+		}
+		var payload liveUnsubscribeRequest
+		if err := decodeJSONBody(req, &payload); err != nil {
+			rstf.WriteErrorEnvelope(w, err)
+			return
+		}
+		liveHub.Unregister(payload.ClientID, payload.SubscriptionID)
+		writeRPCSuccess(w, map[string]bool{"ok": true})
+	}))
+
+	rt.Handle("/__rstf/rpc", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			methodNotAllowed(w, []string{http.MethodPost})
+			return
+		}
+		var payload rpcRequest
+		if err := decodeJSONBody(req, &payload); err != nil {
+			rstf.WriteErrorEnvelope(w, err)
+			return
+		}
+		result, err := executeMutationOrAction(req, rstfApp, payload.Route, payload.Name, payload.Kind, payload.Params, payload.Input, liveHub)
+		if err != nil {
+			rstf.WriteErrorEnvelope(w, err)
+			return
+		}
+		writeRPCSuccess(w, result)
+	}))
 `)
 
 	for _, route := range routes {
@@ -569,7 +932,7 @@ func writeHTMLRenderBlock(
 			continue
 		}
 		imp, ok := aliasMap[depDir]
-		if !ok {
+		if !ok || !imp.HasSSR {
 			continue
 		}
 		fmt.Fprintf(b, "\t\t\t\tsd[%q] = %s\n", depDir, ssrCall(imp.Alias, imp.HasContext))

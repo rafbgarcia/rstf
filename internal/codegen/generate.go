@@ -499,6 +499,11 @@ func writeDTSAndRuntime(rstfDir string, rf RouteFile) error {
 }
 
 func writeRouteHelpers(rstfDir string, routeDefs []RouteDef) error {
+	clientPath := filepath.Join(rstfDir, "generated", "client.ts")
+	if err := os.WriteFile(clientPath, []byte(GenerateClientRuntimeTS()), 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", clientPath, err)
+	}
+
 	tsPath := filepath.Join(rstfDir, "generated", "routes.ts")
 	if err := os.WriteFile(tsPath, []byte(GenerateRoutesTS(routeDefs)), 0644); err != nil {
 		return fmt.Errorf("writing %s: %w", tsPath, err)

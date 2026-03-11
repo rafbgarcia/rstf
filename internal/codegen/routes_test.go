@@ -8,8 +8,18 @@ import (
 
 func TestBuildRouteDefs(t *testing.T) {
 	files := []RouteFile{
-		{Dir: "routes/index"},
-		{Dir: "routes/users.$id"},
+		{
+			Dir: "routes/index",
+			Funcs: []RouteFunc{
+				{Name: "ListPosts", Kind: RouteFuncKindQuery, ReturnType: "ListPostsResult"},
+			},
+		},
+		{
+			Dir: "routes/users.$id",
+			Funcs: []RouteFunc{
+				{Name: "SendMessage", Kind: RouteFuncKindMutation, InputType: "SendMessageInput"},
+			},
+		},
 	}
 	deps := map[string][]string{
 		"routes/no-server": nil,
@@ -20,9 +30,10 @@ func TestBuildRouteDefs(t *testing.T) {
 
 	assert.Equal(t, []RouteDef{
 		{
-			Dir:     "routes/index",
-			Name:    "index",
-			Pattern: "/",
+			Dir:      "routes/index",
+			Name:     "index",
+			Pattern:  "/",
+			RPCFuncs: []RPCFuncDef{{Name: "ListPosts", Kind: RouteFuncKindQuery, ReturnType: "ListPostsResult"}},
 		},
 		{
 			Dir:     "routes/no-server",
@@ -36,6 +47,7 @@ func TestBuildRouteDefs(t *testing.T) {
 			Params: []RouteParamDef{
 				{Name: "id", GoField: "Id"},
 			},
+			RPCFuncs: []RPCFuncDef{{Name: "SendMessage", Kind: RouteFuncKindMutation, InputType: "SendMessageInput"}},
 		},
 	}, got)
 }
@@ -52,10 +64,16 @@ func TestGenerateRoutesTS(t *testing.T) {
 			Params: []RouteParamDef{
 				{Name: "id", GoField: "Id"},
 			},
+			Dir: "routes/users.$id",
+			RPCFuncs: []RPCFuncDef{
+				{Name: "GetMessages", Kind: RouteFuncKindQuery, ReturnType: "GetMessagesResult"},
+				{Name: "SendMessage", Kind: RouteFuncKindMutation, InputType: "SendMessageInput"},
+			},
 		},
 	})
 
 	for _, expected := range []string{
+		`import { defineAction, defineMutation, defineQuery, useAction, useMutation, useQuery } from "./client";`,
 		`export const routes = {`,
 		`"index": {`,
 		`pattern: "/",`,
@@ -65,6 +83,9 @@ func TestGenerateRoutesTS(t *testing.T) {
 		`pattern: "/users/{id}",`,
 		`url(params: { id: string }): string {`,
 		`return "/users/" + encodeURIComponent(params.id);`,
+		`GetMessages: defineQuery<{ id: string }, RoutesUsersId.GetMessagesResult>("users.$id", "GetMessages"),`,
+		`SendMessage: defineMutation<{ id: string }, RoutesUsersId.SendMessageInput, void>("users.$id", "SendMessage"),`,
+		`export { useAction, useMutation, useQuery };`,
 		`export type RouteName = keyof typeof routes;`,
 	} {
 		assert.Contains(t, got, expected, "missing %q\n\n%s", expected, got)
@@ -82,6 +103,9 @@ func TestGenerateRoutesGo(t *testing.T) {
 			Pattern: "/users/{id}",
 			Params: []RouteParamDef{
 				{Name: "id", GoField: "Id"},
+			},
+			RPCFuncs: []RPCFuncDef{
+				{Name: "GetMessages", Kind: RouteFuncKindQuery},
 			},
 		},
 	})
@@ -101,6 +125,9 @@ func TestGenerateRoutesGo(t *testing.T) {
 		`return Location("/users/" + url.PathEscape(params.Id))`,
 		"func (UsersDotIdRoute) URL(params UsersDotIdParams) Location {",
 		"var UsersDotId UsersDotIdRoute",
+		`type QueryKey[P any] struct {`,
+		`return rstf.NewSubscriptionKey("users.$id", "GetMessages", map[string]string{"id": params.Id})`,
+		"var UsersDotIdGetMessages = QueryKey[UsersDotIdParams]{",
 	} {
 		assert.Contains(t, got, expected, "missing %q\n\n%s", expected, got)
 	}

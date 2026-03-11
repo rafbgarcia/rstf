@@ -17,21 +17,25 @@ func TestCodegen(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, ".rstf")) })
 
-	assert.Equal(t, 8, result.RouteCount)
+	assert.Equal(t, 9, result.RouteCount)
 
 	// Verify generated files exist.
 	expectedFiles := []string{
 		".rstf/server_gen.go",
+		".rstf/generated/client.ts",
 		".rstf/generated/routes.ts",
 		".rstf/routes/routes_gen.go",
 		".rstf/types/main.d.ts",
 		".rstf/types/get-vs-ssr.d.ts",
+		".rstf/types/live-chat-id.d.ts",
 		".rstf/types/shared-ui-user-avatar.d.ts",
 		".rstf/types/users-id.d.ts",
 		".rstf/generated/main.ts",
 		".rstf/generated/routes/get-vs-ssr.ts",
+		".rstf/generated/routes/live-chat.$id.ts",
 		".rstf/generated/shared/ui/user-avatar.ts",
 		".rstf/entries/get-vs-ssr.entry.tsx",
+		".rstf/entries/live-chat-id.entry.tsx",
 		".rstf/entries/no-server.entry.tsx",
 	}
 	for _, f := range expectedFiles {
@@ -76,6 +80,10 @@ func TestCodegen(t *testing.T) {
 	assert.Contains(t, routesModStr, `export const routes = {`)
 	assert.Contains(t, routesModStr, `"get-vs-ssr": {`)
 	assert.Contains(t, routesModStr, `url(): string {`)
+	assert.Contains(t, routesModStr, `import { defineAction, defineMutation, defineQuery, useAction, useMutation, useQuery } from "./client"`)
+	assert.Contains(t, routesModStr, `"live-chat.$id": {`)
+	assert.Contains(t, routesModStr, `GetMessages: defineQuery<{ id: string }, RoutesLiveChatId.GetMessagesResult>("live-chat.$id", "GetMessages")`)
+	assert.Contains(t, routesModStr, `SendMessage: defineMutation<{ id: string }, RoutesLiveChatId.SendMessageInput, void>("live-chat.$id", "SendMessage")`)
 	assert.Contains(t, routesModStr, `"users.$id": {`)
 	assert.Contains(t, routesModStr, `url(params: { id: string }): string {`)
 	assert.Contains(t, routesModStr, `return "/users/" + encodeURIComponent(params.id);`)
@@ -90,6 +98,7 @@ func TestCodegen(t *testing.T) {
 	assert.Contains(t, goRoutesStr, "func (UsersDotIdRoute) URL(params UsersDotIdParams) Location {")
 	assert.Contains(t, goRoutesStr, "var UsersDotId UsersDotIdRoute")
 	assert.Contains(t, goRoutesStr, `return Location("/users/" + url.PathEscape(params.Id))`)
+	assert.Contains(t, goRoutesStr, `var LiveChatDotIdGetMessages = QueryKey[LiveChatDotIdParams]{`)
 
 	// Verify server_gen.go content.
 	serverCode, err := os.ReadFile(filepath.Join(root, ".rstf/server_gen.go"))
@@ -144,5 +153,6 @@ func TestCodegen(t *testing.T) {
 
 	// Verify Entries map is populated.
 	assert.Contains(t, result.Entries, "routes/get-vs-ssr")
+	assert.Contains(t, result.Entries, "routes/live-chat.$id")
 	assert.Contains(t, result.Entries, "routes/no-server")
 }
