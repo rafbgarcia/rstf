@@ -355,11 +355,9 @@ func SSR(ctx *rstf.Context) ServerData {
 }
 `
 
-const mainTSXTemplate = `import { serverData } from "@rstf/main";
-import type { ReactNode } from "react";
+const mainTSXTemplate = `import { SSR, type MainSSRProps } from "@rstf/main";
 
-export function View({ children }: { children: ReactNode }) {
-  const { appName, tagline } = serverData();
+export const View = SSR(function View({ children, appName, tagline }: MainSSRProps) {
 
   return (
     <html lang="en">
@@ -400,7 +398,7 @@ export function View({ children }: { children: ReactNode }) {
       </body>
     </html>
   );
-}
+});
 `
 
 const indexGoTemplate = `package index
@@ -456,11 +454,10 @@ func GET(ctx *rstf.Context) error {
 }
 `
 
-const indexTSXTemplate = `import { serverData } from "@rstf/routes/index";
+const indexTSXTemplate = `import { SSR, type RoutesIndexSSRProps } from "@rstf/routes/index";
 import { AppBadge } from "../../shared/ui/app-badge";
 
-export function View() {
-  const { headline, intro, features } = serverData();
+export const View = SSR(function View({ headline, intro, features }: RoutesIndexSSRProps) {
 
   return (
     <div className="space-y-8">
@@ -508,7 +505,7 @@ export function View() {
       </section>
     </div>
   );
-}
+});
 `
 
 const liveChatGoTemplate = `package livechat
@@ -711,7 +708,7 @@ func SSR(ctx *rstf.Context) ServerData {
 }
 `
 
-const userProfileTSXTemplate = `import { serverData } from "@rstf/routes/users._id";
+const userProfileTSXTemplate = `import { SSR, type RoutesUsersIdSSRProps } from "@rstf/routes/users._id";
 import { AppBadge } from "../../shared/ui/app-badge";
 
 const colorClasses: Record<string, string> = {
@@ -720,8 +717,7 @@ const colorClasses: Record<string, string> = {
   stone: "from-stone-100 to-white text-stone-900 ring-stone-200",
 };
 
-export function View() {
-  const { name, role, bio, color } = serverData();
+export const View = SSR(function View({ name, role, bio, color }: RoutesUsersIdSSRProps) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -758,7 +754,7 @@ export function View() {
       </aside>
     </div>
   );
-}
+});
 `
 
 const appBadgeGoTemplate = `package appbadge
@@ -778,10 +774,9 @@ func SSR(ctx *rstf.Context) ServerData {
 }
 `
 
-const appBadgeTSXTemplate = `import { serverData } from "@rstf/shared/ui/app-badge";
+const appBadgeTSXTemplate = `import { SSR, type SharedUiAppBadgeSSRProps } from "@rstf/shared/ui/app-badge";
 
-export function AppBadge() {
-  const { label, version } = serverData();
+export const AppBadge = SSR(function AppBadge({ label, version }: SharedUiAppBadgeSSRProps) {
 
   return (
     <div className="rounded-[1.75rem] border border-stone-200 bg-white px-5 py-5 shadow-[0_18px_40px_-30px_rgba(24,24,27,0.4)]">
@@ -792,7 +787,7 @@ export function AppBadge() {
       </div>
     </div>
   );
-}
+});
 `
 
 const readmeTemplate = "# {{ .DisplayName }}\n\n" +

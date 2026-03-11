@@ -1,9 +1,8 @@
-import { serverData } from "@rstf/routes/get-vs-ssr";
+import { SSR, type RoutesGetVsSsrSSRProps } from "@rstf/routes/get-vs-ssr";
 import { UserAvatar } from "../../shared/ui/user-avatar";
 import { useState } from "react";
 
-export function View() {
-  const { message, posts } = serverData();
+export const View = SSR(function View({ message, posts }: RoutesGetVsSsrSSRProps) {
   const [count, setCount] = useState(0);
   return (
     <div>
@@ -22,4 +21,4 @@ export function View() {
       </ul>
     </div>
   );
-}
+});

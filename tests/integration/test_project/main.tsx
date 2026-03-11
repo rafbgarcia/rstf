@@ -1,8 +1,6 @@
-import { serverData } from "@rstf/main";
-import type { ReactNode } from "react";
+import { SSR, type MainSSRProps } from "@rstf/main";
 
-export function View({ children }: { children: ReactNode }) {
-  const { appName } = serverData();
+export const View = SSR(function View({ children, appName }: MainSSRProps) {
   return (
     <html>
       <head>
@@ -19,4 +17,4 @@ export function View({ children }: { children: ReactNode }) {
       </body>
     </html>
   );
-}
+});

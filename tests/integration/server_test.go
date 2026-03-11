@@ -29,7 +29,7 @@ func TestEndToEnd(t *testing.T) {
 	html, err := r.Render(renderer.RenderRequest{
 		Component: "routes/get-vs-ssr",
 		Layout:    "main",
-		ServerData: map[string]map[string]any{
+		SSRProps: map[string]map[string]any{
 			"main": {
 				"appName": "Basic Example",
 			},

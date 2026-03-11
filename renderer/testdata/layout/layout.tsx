@@ -1,8 +1,6 @@
-import { serverData } from "@rstf/layout/layout";
-import type { ReactNode } from "react";
+import { SSR, type LayoutLayoutSSRProps } from "@rstf/layout/layout";
 
-export function View({ children }: { children: ReactNode }) {
-  const { title } = serverData();
+export const View = SSR(function View({ children, title }: LayoutLayoutSSRProps) {
   return (
     <html>
       <head>
@@ -14,4 +12,4 @@ export function View({ children }: { children: ReactNode }) {
       </body>
     </html>
   );
-}
+});

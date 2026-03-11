@@ -471,6 +471,11 @@ func writeRouteHelpers(rstfDir string, routeDefs []RouteDef) error {
 		return fmt.Errorf("writing %s: %w", clientPath, err)
 	}
 
+	ssrPath := filepath.Join(rstfDir, "generated", "ssr.ts")
+	if err := os.WriteFile(ssrPath, []byte(GenerateSSRRuntimeTS()), 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", ssrPath, err)
+	}
+
 	tsPath := filepath.Join(rstfDir, "generated", "routes.ts")
 	if err := os.WriteFile(tsPath, []byte(GenerateRoutesTS(routeDefs)), 0644); err != nil {
 		return fmt.Errorf("writing %s: %w", tsPath, err)
@@ -580,7 +585,8 @@ func runtimeModulePath(dir string) string {
 	return dir + ".ts"
 }
 
-// componentPathForDir returns the key used in __RSTF_SERVER_DATA__.
+// componentPathForDir returns the generated component path used in SSR wrapper
+// metadata and in the serialized request-scoped SSR props map.
 //
 //	"."                       → "main"
 //	"routes/dashboard"        → "routes/dashboard"

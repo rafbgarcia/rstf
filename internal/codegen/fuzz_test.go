@@ -213,10 +213,10 @@ func FuzzGenerateRuntimeModule(f *testing.F) {
 			return
 		}
 
-		assert.Contains(t, rtmod, "export function serverData()", "missing serverData export")
-		assert.Contains(t, rtmod, "__setServerData", "missing __setServerData")
+		assert.Contains(t, rtmod, "export const SSR = createSSRWrapper", "missing SSR wrapper export")
+		assert.Contains(t, rtmod, "createSSRWrapper", "missing createSSRWrapper import")
 		assert.Equal(t, strings.Count(rtmod, "{"), strings.Count(rtmod, "}"), "unbalanced braces: %d '{' vs %d '}'", strings.Count(rtmod, "{"), strings.Count(rtmod, "}"))
-		// componentPath is used as the window lookup key.
+		// componentPath is used as the generated SSR wrapper key.
 		assert.Contains(t, rtmod, componentPath, "componentPath %q not found in output", componentPath)
 	})
 }
@@ -287,7 +287,7 @@ func FuzzParseAndGenerate(f *testing.F) {
 
 			rtmod := GenerateRuntimeModule(rf, rf.Dir)
 			if rtmod != "" {
-				assert.Contains(t, rtmod, "export function serverData()", "missing serverData export")
+				assert.Contains(t, rtmod, "export const SSR = createSSRWrapper", "missing SSR wrapper export")
 			}
 		}
 	})

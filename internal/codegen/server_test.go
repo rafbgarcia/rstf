@@ -11,9 +11,9 @@ import (
 
 // assemblePage mirrors the generated assemblePage function from writeAssemblePage
 // so we can unit-test the CSS link injection logic directly.
-func assemblePage(html string, serverData map[string]map[string]any, bundlePath string, cssPath string) string {
-	sdJSON, _ := json.Marshal(serverData)
-	dataScript := "<script>window.__RSTF_SERVER_DATA__ = " + string(sdJSON) + "</script>"
+func assemblePage(html string, ssrProps map[string]map[string]any, bundlePath string, cssPath string) string {
+	sdJSON, _ := json.Marshal(ssrProps)
+	dataScript := "<script>window.__RSTF_SSR_PROPS__ = " + string(sdJSON) + "</script>"
 	bundleScript := "<script src=\"" + bundlePath + "\"></script>"
 	page := "<!DOCTYPE html>" + html
 	if cssPath != "" {
@@ -37,7 +37,7 @@ func TestAssemblePage_WithCSS(t *testing.T) {
 		{"doctype", "<!DOCTYPE html>"},
 		{"css link tag", `<link rel="stylesheet" href="/rstf/static/main.css">`},
 		{"css before </head>", `main.css">` + "\n</head>"},
-		{"data script", `window.__RSTF_SERVER_DATA__`},
+		{"data script", `window.__RSTF_SSR_PROPS__`},
 		{"bundle script", `<script src="/rstf/static/dashboard/bundle.js"></script>`},
 	}
 	for _, c := range checks {
@@ -61,7 +61,7 @@ func TestAssemblePage_WithoutCSS(t *testing.T) {
 	assert.NotContains(t, got, "<link", "should not contain <link> tag when cssPath is empty\n\nFull output:\n%s", got)
 
 	// Should still have doctype and scripts.
-	for _, want := range []string{"<!DOCTYPE html>", "window.__RSTF_SERVER_DATA__", `<script src="`} {
+	for _, want := range []string{"<!DOCTYPE html>", "window.__RSTF_SSR_PROPS__", `<script src="`} {
 		assert.Contains(t, got, want, "output missing %q\n\nFull output:\n%s", want, got)
 	}
 }
@@ -105,8 +105,8 @@ func TestGenerateServer_SingleRoute(t *testing.T) {
 		`app "github.com/user/myapp"`,
 		`dashboard "github.com/user/myapp/routes/dashboard"`,
 		"func structToMap(v any) map[string]any {",
-		"func assemblePage(html string, serverData map[string]map[string]any, bundlePath string, cssPath string) string {",
-		"window.__RSTF_SERVER_DATA__",
+		"func assemblePage(html string, ssrProps map[string]map[string]any, bundlePath string, cssPath string) string {",
+		"window.__RSTF_SSR_PROPS__",
 		"func main() {",
 		"r := renderer.New()",
 		`if err := r.Start("."); err != nil`,

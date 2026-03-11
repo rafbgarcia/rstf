@@ -67,7 +67,7 @@ Examples:
 `rstf/` is generated output. Important files and directories include:
 
 - `rstf/generated/routes.ts`: TypeScript route helpers and live RPC descriptors
-- `rstf/generated/<path>.ts`: generated runtime modules for route and shared server data
+- `rstf/generated/<path>.ts`: generated SSR wrapper modules for layout, routes, and shared components
 - `rstf/types/*.d.ts`: generated TypeScript types from Go data contracts
 - `rstf/routes/routes_gen.go`: generated Go route helper package, imported as `your-module/rstf/routes`
 - `rstf/server_gen.go`: generated Go server entrypoint

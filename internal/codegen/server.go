@@ -308,12 +308,12 @@ func writeStructToMap(b *strings.Builder) {
 }
 
 func writeAssemblePage(b *strings.Builder) {
-	b.WriteString(`func assemblePage(html string, serverData map[string]map[string]any, bundlePath string, cssPath string) string {
-	sdJSON, err := json.Marshal(serverData)
+	b.WriteString(`func assemblePage(html string, ssrProps map[string]map[string]any, bundlePath string, cssPath string) string {
+	sdJSON, err := json.Marshal(ssrProps)
 	if err != nil {
 		sdJSON = []byte("{}")
 	}
-	dataScript := "<script>window.__RSTF_SERVER_DATA__ = " + string(sdJSON) + "</script>"
+	dataScript := "<script>window.__RSTF_SSR_PROPS__ = " + string(sdJSON) + "</script>"
 	bundleScript := "<script src=\"" + bundlePath + "\"></script>"
 	page := "<!DOCTYPE html>" + html
 	if cssPath != "" {
@@ -935,7 +935,7 @@ func writeHTMLRenderBlock(
 		fmt.Fprintf(b, "\t\t\t\tsd[%q] = %s\n", depDir, ssrCall(imp.Alias, imp.HasContext))
 	}
 
-	fmt.Fprintf(b, "\t\t\t\thtml, err := r.Render(renderer.RenderRequest{Component: %q, Layout: \"main\", ServerData: sd})\n", route.dir)
+	fmt.Fprintf(b, "\t\t\t\thtml, err := r.Render(renderer.RenderRequest{Component: %q, Layout: \"main\", SSRProps: sd})\n", route.dir)
 	b.WriteString("\t\t\t\tif err != nil {\n")
 	b.WriteString("\t\t\t\t\thttp.Error(w, err.Error(), 500)\n")
 	b.WriteString("\t\t\t\t\treturn\n")

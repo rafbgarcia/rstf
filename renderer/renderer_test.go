@@ -65,7 +65,7 @@ func TestRenderWithServerData(t *testing.T) {
 	html, err := r.Render(RenderRequest{
 		Component: "hello/hello",
 		Layout:    "layout/layout",
-		ServerData: map[string]map[string]any{
+		SSRProps: map[string]map[string]any{
 			"hello/hello": {
 				"name":  "World",
 				"count": 42,
@@ -90,7 +90,7 @@ func TestRenderWithLayout(t *testing.T) {
 	html, err := r.Render(RenderRequest{
 		Component: "hello/hello",
 		Layout:    "layout/layout",
-		ServerData: map[string]map[string]any{
+		SSRProps: map[string]map[string]any{
 			"hello/hello": {
 				"name":  "World",
 				"count": 1,
@@ -116,7 +116,7 @@ func TestRenderMissingComponent(t *testing.T) {
 	_, err := r.Render(RenderRequest{
 		Component: "nonexistent/component",
 		Layout:    "layout/layout",
-		ServerData: map[string]map[string]any{
+		SSRProps: map[string]map[string]any{
 			"layout/layout": {"title": "Test"},
 		},
 	})
@@ -130,7 +130,7 @@ func TestRenderNoViewExport(t *testing.T) {
 	_, err := r.Render(RenderRequest{
 		Component: "broken/broken",
 		Layout:    "layout/layout",
-		ServerData: map[string]map[string]any{
+		SSRProps: map[string]map[string]any{
 			"layout/layout": {"title": "Test"},
 		},
 	})

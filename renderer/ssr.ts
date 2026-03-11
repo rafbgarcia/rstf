@@ -19,7 +19,6 @@ const projectRoot = parseProjectRoot();
 const nodeRequire = createRequire(import.meta.url);
 
 const moduleCache = new Map<string, any>();
-const generatedModuleCache = new Map<string, any>();
 let cacheVersion = 0;
 let createElement: any;
 let renderToString: any;
@@ -84,37 +83,10 @@ async function loadComponent(componentPath: string): Promise<Function> {
   return mod.View;
 }
 
-async function resolveGeneratedModules(
-  serverData: Record<string, Record<string, any>>
-): Promise<Array<[any, Record<string, any>]>> {
-  const entries = Object.entries(serverData);
-  const results: Array<[any, Record<string, any>]> = [];
-
-  await Promise.all(
-    entries.map(async ([componentPath, data]) => {
-      let mod = generatedModuleCache.get(componentPath);
-      if (!mod) {
-        const genPath = path.join(projectRoot, "rstf", "generated", `${componentPath}.ts`);
-        try {
-          mod = await importVersioned(genPath);
-          generatedModuleCache.set(componentPath, mod);
-        } catch {
-          return;
-        }
-      }
-      if (typeof mod.__setServerData === "function") {
-        results.push([mod, data]);
-      }
-    })
-  );
-
-  return results;
-}
-
 interface RenderRequest {
   component: string;
   layout: string;
-  serverData?: Record<string, Record<string, any>>;
+  ssrProps?: Record<string, Record<string, any>>;
 }
 
 function writeJSON(res: any, status: number, payload: unknown): void {
@@ -130,7 +102,6 @@ const server = createServer(async (req, res) => {
 
   if (method === "POST" && url === "/invalidate") {
     moduleCache.clear();
-    generatedModuleCache.clear();
     cacheVersion++;
     writeJSON(res, 200, { ok: true });
     return;
@@ -144,16 +115,18 @@ const server = createServer(async (req, res) => {
       }
 
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as RenderRequest;
-      const generatedModules = body.serverData
-        ? await resolveGeneratedModules(body.serverData)
-        : [];
+      const ssrRuntimePath = path.join(projectRoot, "rstf", "generated", "ssr.ts");
+      const { SSRDataProvider } = await importVersioned(ssrRuntimePath);
       const Layout = await loadComponent(body.layout);
       const Route = await loadComponent(body.component);
 
-      for (const [mod, data] of generatedModules) {
-        mod.__setServerData(data);
-      }
-      const html = renderToString(createElement(Layout, null, createElement(Route)));
+      const html = renderToString(
+        createElement(
+          SSRDataProvider,
+          { data: body.ssrProps ?? {} },
+          createElement(Layout, null, createElement(Route))
+        )
+      );
       writeJSON(res, 200, { html });
       return;
     } catch (e: any) {

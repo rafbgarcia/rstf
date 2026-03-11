@@ -42,15 +42,14 @@ func SSR(ctx *rstf.Context) ServerData {
 Then consume it in `index.tsx`:
 
 ```tsx
-import { serverData } from "@rstf/routes/dashboard";
+import { SSR, type RoutesDashboardSSRProps } from "@rstf/routes/dashboard";
 
-export function View() {
-  const { message } = serverData();
+export const View = SSR(function View({ message }: RoutesDashboardSSRProps) {
   return <h1>{message}</h1>;
-}
+});
 ```
 
-The `serverData()` function is generated from the Go `SSR` return type.
+The generated `SSR` wrapper injects request-scoped props derived from the Go `SSR` return type.
 
 ## JSON Handlers
 
@@ -86,7 +85,7 @@ These handlers are for normal request/response HTTP behavior. They are separate 
 
 `main.go` and `main.tsx` define the app layout.
 
-Shared UI can also have Go-backed server data. For example, a shared component under `shared/ui/user-avatar` can export `SSR` in Go and consume `serverData()` in TSX.
+Shared UI can also have Go-backed server data. For example, a shared component under `shared/ui/user-avatar` can export `SSR` in Go and consume generated SSR props in TSX.
 
 That allows typed server data to flow into both routes and shared components.
 

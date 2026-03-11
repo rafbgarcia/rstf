@@ -23,6 +23,7 @@ func TestCodegen(t *testing.T) {
 	expectedFiles := []string{
 		"rstf/server_gen.go",
 		"rstf/generated/client.ts",
+		"rstf/generated/ssr.ts",
 		"rstf/generated/routes.ts",
 		"rstf/routes/routes_gen.go",
 		"rstf/types/main.d.ts",
@@ -61,18 +62,19 @@ func TestCodegen(t *testing.T) {
 	assert.Contains(t, string(avatarDTS), "name: string")
 	assert.Contains(t, string(avatarDTS), "status: string")
 
-	// Verify runtime module has dual-mode initialization.
+	// Verify runtime module exports file-scoped SSR wrappers.
 	dashMod, err := os.ReadFile(filepath.Join(root, "rstf/generated/routes/get-vs-ssr.ts"))
 	require.NoError(t, err)
 	dashModStr := string(dashMod)
-	assert.Contains(t, dashModStr, `typeof window !== "undefined"`)
-	assert.Contains(t, dashModStr, `__RSTF_SERVER_DATA__["routes/get-vs-ssr"]`)
+	assert.Contains(t, dashModStr, `import { createSSRWrapper } from "@rstf/ssr"`)
+	assert.Contains(t, dashModStr, `export type RoutesGetVsSsrSSRProps = RoutesGetVsSsr.ServerData;`)
+	assert.Contains(t, dashModStr, `export const SSR = createSSRWrapper<RoutesGetVsSsr.ServerData>("routes/get-vs-ssr");`)
 
 	avatarMod, err := os.ReadFile(filepath.Join(root, "rstf/generated/shared/ui/user-avatar.ts"))
 	require.NoError(t, err)
 	avatarModStr := string(avatarMod)
-	assert.Contains(t, avatarModStr, `typeof window !== "undefined"`)
-	assert.Contains(t, avatarModStr, `__RSTF_SERVER_DATA__["shared/ui/user-avatar"]`)
+	assert.Contains(t, avatarModStr, `export type SharedUiUserAvatarSSRProps = SharedUiUserAvatar.ServerData;`)
+	assert.Contains(t, avatarModStr, `export const SSR = createSSRWrapper<SharedUiUserAvatar.ServerData>("shared/ui/user-avatar");`)
 
 	routesMod, err := os.ReadFile(filepath.Join(root, "rstf/generated/routes.ts"))
 	require.NoError(t, err)
@@ -116,6 +118,7 @@ func TestCodegen(t *testing.T) {
 		"structToMap(dashboard.SSR(ctx))",
 		`sd["shared/ui/user-avatar"] = structToMap(useravatar.SSR(ctx))`,
 		"func assemblePage(",
+		`window.__RSTF_SSR_PROPS__`,
 		`rt.Handle("/rstf/static/*"`,
 		"assemblePage(html, sd,",
 	} {
@@ -128,11 +131,10 @@ func TestCodegen(t *testing.T) {
 	entryStr := string(entryContent)
 	for _, expected := range []string{
 		`import { hydrateRoot } from "react-dom/client"`,
+		`import { SSRDataProvider } from "@rstf/ssr"`,
 		`import { View as Layout } from "../../main"`,
 		`import { View as Route } from "../../routes/get-vs-ssr"`,
-		`import "@rstf/main"`,
-		`import "@rstf/routes/get-vs-ssr"`,
-		`import "@rstf/shared/ui/user-avatar"`,
+		`const ssrProps = (window as any).__RSTF_SSR_PROPS__ ?? {};`,
 		"hydrateRoot(document,",
 	} {
 		assert.Containsf(t, entryStr, expected, "get-vs-ssr.entry.tsx missing %q\n\nFull content:\n%s", expected, entryStr)
@@ -143,9 +145,9 @@ func TestCodegen(t *testing.T) {
 	noServerEntryStr := string(noServerEntry)
 	for _, expected := range []string{
 		`import { hydrateRoot } from "react-dom/client"`,
+		`import { SSRDataProvider } from "@rstf/ssr"`,
 		`import { View as Layout } from "../../main"`,
 		`import { View as Route } from "../../routes/no-server"`,
-		`import "@rstf/main"`,
 		"hydrateRoot(document,",
 	} {
 		assert.Containsf(t, noServerEntryStr, expected, "no-server.entry.tsx missing %q\n\nFull content:\n%s", expected, noServerEntryStr)

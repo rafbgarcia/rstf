@@ -155,11 +155,11 @@ func (r *Renderer) Stop() error {
 }
 
 // RenderRequest describes what to render: a route component inside a layout,
-// with server data provided to generated modules via ES module live bindings.
+// with request-scoped SSR props keyed by component path.
 type RenderRequest struct {
-	Component  string                    `json:"component"`
-	Layout     string                    `json:"layout"`
-	ServerData map[string]map[string]any `json:"serverData,omitempty"`
+	Component string                    `json:"component"`
+	Layout    string                    `json:"layout"`
+	SSRProps  map[string]map[string]any `json:"ssrProps,omitempty"`
 }
 
 type renderResponse struct {
