@@ -21,6 +21,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func launchTestBrowser(t *testing.T) *rod.Browser {
+	t.Helper()
+
+	u := launcher.New().
+		Headless(true).
+		NoSandbox(true).
+		MustLaunch()
+
+	browser := rod.New().ControlURL(u).MustConnect()
+	t.Cleanup(func() { browser.MustClose() })
+	return browser
+}
+
 func TestHydration(t *testing.T) {
 	root := testProjectRoot()
 
@@ -58,9 +71,7 @@ func TestHydration(t *testing.T) {
 	waitForServer(t, baseURL+"/get-vs-ssr", 10*time.Second)
 
 	// Step 7: Launch headless browser.
-	u := launcher.New().Headless(true).MustLaunch()
-	browser := rod.New().ControlURL(u).MustConnect()
-	t.Cleanup(func() { browser.MustClose() })
+	browser := launchTestBrowser(t)
 
 	page := browser.MustPage("about:blank")
 	page.MustSetExtraHeaders("Accept", "text/html")
@@ -123,9 +134,7 @@ func TestLiveQueryUpdatesAcrossClients(t *testing.T) {
 	baseURL := fmt.Sprintf("http://localhost:%s", port)
 	waitForServer(t, baseURL+"/live-chat/room-1", 10*time.Second)
 
-	u := launcher.New().Headless(true).MustLaunch()
-	browser := rod.New().ControlURL(u).MustConnect()
-	t.Cleanup(func() { browser.MustClose() })
+	browser := launchTestBrowser(t)
 
 	pageA := browser.MustPage("about:blank")
 	pageA.MustSetExtraHeaders("Accept", "text/html")
@@ -267,9 +276,7 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 	require.Equal(t, 200, cssResp.StatusCode)
 
 	// Step 8: Launch headless browser and verify computed styles.
-	u := launcher.New().Headless(true).MustLaunch()
-	browser := rod.New().ControlURL(u).MustConnect()
-	t.Cleanup(func() { browser.MustClose() })
+	browser := launchTestBrowser(t)
 
 	page := browser.MustPage("about:blank")
 	page.MustSetExtraHeaders("Accept", "text/html")

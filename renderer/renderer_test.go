@@ -2,8 +2,10 @@ package renderer
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/rafbgarcia/rstf/internal/bundler"
@@ -16,10 +18,10 @@ func testdataDir() string {
 	return filepath.Join(filepath.Dir(filename), "testdata")
 }
 
-func repoRootDir() string {
-	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Dir(filepath.Dir(filename))
-}
+var (
+	rendererDepsOnce sync.Once
+	rendererDepsErr  error
+)
 
 func ensureLocalNodeModules(t *testing.T) {
 	t.Helper()
@@ -27,20 +29,37 @@ func ensureLocalNodeModules(t *testing.T) {
 	nodeModulesDir := filepath.Join(testdataDir(), "node_modules")
 	require.NoError(t, os.MkdirAll(nodeModulesDir, 0755))
 
-	for _, pkg := range []string{"tsx", "react", "react-dom", "scheduler"} {
-		linkPath := filepath.Join(nodeModulesDir, pkg)
-		if _, err := os.Lstat(linkPath); err == nil {
-			continue
-		} else if !os.IsNotExist(err) {
-			require.NoError(t, err)
+	rendererDepsOnce.Do(func() {
+		reactPath := filepath.Join(nodeModulesDir, "react")
+		if _, err := os.Stat(reactPath); os.IsNotExist(err) {
+			cmd := exec.Command("npm", "install")
+			cmd.Dir = testdataDir()
+			cmd.Env = append(
+				os.Environ(),
+				"NO_UPDATE_NOTIFIER=1",
+				"npm_config_fund=false",
+				"npm_config_audit=false",
+			)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			rendererDepsErr = cmd.Run()
+			if rendererDepsErr != nil {
+				return
+			}
+		} else if err != nil {
+			rendererDepsErr = err
+			return
 		}
 
-		target := filepath.Join(repoRootDir(), "node_modules", pkg)
-		require.NoError(t, os.Symlink(target, linkPath))
-		t.Cleanup(func() {
-			_ = os.Remove(linkPath)
-		})
-	}
+		rstfLinkPath := filepath.Join(nodeModulesDir, "@rstf")
+		if err := os.Remove(rstfLinkPath); err != nil && !os.IsNotExist(err) {
+			rendererDepsErr = err
+			return
+		}
+		rendererDepsErr = os.Symlink(filepath.Join("..", ".rstf", "generated"), rstfLinkPath)
+	})
+
+	require.NoError(t, rendererDepsErr)
 }
 
 func startRenderer(t *testing.T) *Renderer {
