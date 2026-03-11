@@ -2,6 +2,12 @@
 
 `rstf build` creates a deployable `dist/` directory from the app root.
 
+In scaffolded apps, the preferred entrypoint is:
+
+```bash
+npm run build
+```
+
 ## Usage
 
 ```bash

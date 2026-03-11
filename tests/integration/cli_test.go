@@ -94,10 +94,37 @@ func TestCLIInitScaffoldsApp(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(packageJSON), "\"tailwindcss\"")
 	assert.Contains(t, string(packageJSON), "\"tsx\"")
+	assert.Contains(t, string(packageJSON), "\"@rstf/cli\"")
 	assert.Contains(t, string(packageJSON), "\"build\": \"rstf build\"")
 }
 
-func TestCLIBuildProducesRunnableDist(t *testing.T) {
+func TestCreateRSTFScriptScaffoldsApp(t *testing.T) {
+	appDir := filepath.Join(t.TempDir(), "sunroom")
+
+	cmd := exec.Command(
+		"node",
+		filepath.Join(repoRoot(t), "packages", "create-rstf", "bin", "create-rstf.js"),
+		appDir,
+		"--module",
+		"example.com/sunroom",
+		"--skip-install",
+	)
+	cmd.Dir = repoRoot(t)
+	out, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "create-rstf failed:\n%s", out)
+
+	for _, path := range []string{
+		"go.mod",
+		"package.json",
+		"rstf/routes/routes_gen.go",
+		"main.go",
+	} {
+		_, err := os.Stat(filepath.Join(appDir, path))
+		require.NoErrorf(t, err, "expected %s to exist", path)
+	}
+}
+
+func TestLocalCLIBuildProducesRunnableDist(t *testing.T) {
 	appDir := filepath.Join(t.TempDir(), "sunroom")
 
 	initCmd := exec.Command(rstfBinary(t), "init", appDir, "--module", "example.com/sunroom", "--skip-install")
@@ -112,16 +139,20 @@ func TestCLIBuildProducesRunnableDist(t *testing.T) {
 	npmInstall.Stderr = os.Stderr
 	require.NoError(t, npmInstall.Run())
 
+	_, err = os.Stat(filepath.Join(appDir, "node_modules", ".bin", "rstf"))
+	require.NoError(t, err)
+
 	goModTidy := exec.Command("go", "mod", "tidy")
 	goModTidy.Dir = appDir
 	goModTidy.Stdout = os.Stdout
 	goModTidy.Stderr = os.Stderr
 	require.NoError(t, goModTidy.Run())
 
-	buildCmd := exec.Command(rstfBinary(t), "build")
+	buildCmd := exec.Command("npm", "run", "build")
 	buildCmd.Dir = appDir
+	buildCmd.Env = append(os.Environ(), "NO_UPDATE_NOTIFIER=1", "npm_config_fund=false", "npm_config_audit=false")
 	buildOut, err := buildCmd.CombinedOutput()
-	require.NoErrorf(t, err, "rstf build failed:\n%s", buildOut)
+	require.NoErrorf(t, err, "npm run build failed:\n%s", buildOut)
 
 	distDir := filepath.Join(appDir, "dist")
 	for _, path := range []string{

@@ -25,8 +25,9 @@ That command:
 - creates `./my-app`
 - writes `go.mod`, `package.json`, `tsconfig.json`, `main.go`, `main.tsx`, and demo routes
 - installs the app's npm dependencies
+- installs a local `@rstf/cli` package so the app can run `rstf` through npm scripts
 - generates the initial `rstf/` tree
-- leaves the app ready for `rstf dev`
+- leaves the app ready for `npm run dev`
 
 By default the app's Go module matches the directory name. To override it:
 
@@ -34,13 +35,15 @@ By default the app's Go module matches the directory name. To override it:
 rstf init my-app --module github.com/acme/my-app
 ```
 
-The generated `go.mod` includes a local `replace` directive pointing back to this framework checkout. That is the current intended workflow while `rstf` is still evolving.
+The generated `go.mod` includes a local `replace` directive pointing back to this framework checkout, and `package.json` includes a local `@rstf/cli` dependency from this repo. That is the current intended workflow while `rstf` is still evolving.
+
+The repo also includes the npm bootstrap packages at [packages/create-rstf](/Users/rafa/github.com/rafbgarcia/rstf/packages/create-rstf) and [packages/cli](/Users/rafa/github.com/rafbgarcia/rstf/packages/cli). The intended published entrypoint is `npm create rstf@latest`, but until those packages are published the supported local-checkout flow remains `rstf init`.
 
 ## Start The Dev Server
 
 ```bash
 cd my-app
-rstf dev
+npm run dev
 ```
 
 The generated demo includes:
@@ -81,8 +84,8 @@ Do not edit generated files directly.
 
 When `main.css` exists:
 
-- `rstf dev` builds and serves `rstf/static/main.css`
-- `rstf build` includes the built CSS in `dist/rstf/static/main.css`
+- `npm run dev` builds and serves `rstf/static/main.css`
+- `npm run build` includes the built CSS in `dist/rstf/static/main.css`
 
 If `postcss.config.mjs` exists, `rstf` runs PostCSS. Otherwise `main.css` is copied as-is.
 
@@ -91,7 +94,7 @@ If `postcss.config.mjs` exists, `rstf` runs PostCSS. Otherwise `main.css` is cop
 From the app root:
 
 ```bash
-rstf build
+npm run build
 cd dist
 ./my-app
 ```

@@ -16,6 +16,7 @@ These docs describe the framework as it exists in this repository today. The wor
 ## Current Contract
 
 - `rstf init <name>` creates a full app with app-owned runtime dependencies.
+- Generated apps install a local `@rstf/cli` package and prefer `npm run dev` / `npm run build`.
 - Generated artifacts live in `rstf/`.
 - Dynamic route params use `_name` on disk, for example `routes/users._id/index.go`.
 - `rstf dev` runs the app from the app's own dependencies and generated files.
@@ -26,5 +27,6 @@ These docs describe the framework as it exists in this repository today. The wor
 
 - Go `1.24` is the baseline.
 - Node.js and npm are required for app runtime dependencies and CSS processing.
-- The generated app currently points back to your local framework checkout with a `replace` directive in `go.mod`.
+- The generated app currently points back to your local framework checkout through both `go.mod` and the local `@rstf/cli` package dependency.
+- The repo includes `packages/create-rstf` and `packages/cli` as the npm-native bootstrap path; the intended published entrypoint is `npm create rstf@latest`.
 - APIs, conventions, and generated output may still change.

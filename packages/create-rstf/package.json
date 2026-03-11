@@ -1,0 +1,11 @@
+{
+  "name": "create-rstf",
+  "version": "0.0.0-local",
+  "private": true,
+  "bin": {
+    "create-rstf": "./bin/create-rstf.js"
+  },
+  "dependencies": {
+    "@rstf/cli": "file:../cli"
+  }
+}
