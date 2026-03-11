@@ -1,214 +1,115 @@
 # Getting Started
 
-This guide gets a small `rstf` app running in dev mode with:
-
-- a Go layout
-- a React layout component
-- a server-rendered route
-- a live query route
-
-## What Exists Today
-
-`rstf` is still greenfield. The current user-facing workflow is:
-
-1. create the project structure manually
-2. install the app's React dependencies
-3. run `rstf dev`
-
-Today, `rstf` assumes you are working from a local checkout of the framework repository. The development runtime uses the framework repo's own `node_modules` for the SSR sidecar and bundling pipeline.
+This guide gets a new `rstf` app running with the current standalone-app workflow.
 
 ## Prerequisites
 
-- Go `1.24.6`
-- Node.js
-- npm
-- a local checkout of this repository with its root dependencies installed
+- Go `1.24`
+- Node.js with npm
+- a local checkout of this repository
 
-From the framework repo root:
+Install the CLI from the framework repo root:
 
 ```bash
-npm install
 go install ./cmd/rstf
 ```
 
-That gives you the local `rstf` CLI used in the rest of this guide.
-
-## Minimal Project Layout
-
-A minimal app looks like this:
-
-```text
-my-app/
-  go.mod
-  package.json
-  tsconfig.json
-  main.go
-  main.tsx
-  routes/
-    hello/
-      index.go
-      index.tsx
-```
-
-## go.mod
-
-```go
-module example.com/my-app
-
-go 1.24.6
-
-require github.com/rafbgarcia/rstf v0.0.0
-
-replace github.com/rafbgarcia/rstf => /absolute/path/to/rstf
-```
-
-Use a local `replace` while the framework is still moving quickly.
-
-## package.json
-
-Your app needs React. A minimal `package.json` is:
-
-```json
-{
-  "private": true,
-  "dependencies": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
-  },
-  "devDependencies": {
-    "@types/react": "^19.1.0"
-  }
-}
-```
-
-## tsconfig.json
-
-`rstf` generates `.rstf/generated/*` modules for route helpers and typed server data. Add the generated paths and includes:
-
-```json
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "node",
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "noImplicitAny": true,
-    "paths": {
-      "@rstf/*": ["./.rstf/generated/*"]
-    }
-  },
-  "include": [".rstf/types", ".rstf/generated/**/*.ts", "**/*.ts", "**/*.tsx"]
-}
-```
-
-## Layout Files
-
-`main.go` is the Go layout module.
-
-```go
-package myapp
-
-import rstf "github.com/rafbgarcia/rstf"
-
-type ServerData struct {
-	AppName string `json:"appName"`
-}
-
-func SSR(ctx *rstf.Context) ServerData {
-	return ServerData{AppName: "My App"}
-}
-```
-
-`main.tsx` is the React layout component.
-
-```tsx
-import { serverData } from "@rstf/main";
-import type { ReactNode } from "react";
-
-export function View({ children }: { children: ReactNode }) {
-  const { appName } = serverData();
-
-  return (
-    <html>
-      <head>
-        <title>{appName}</title>
-      </head>
-      <body>
-        <main>{children}</main>
-      </body>
-    </html>
-  );
-}
-```
-
-## First Route
-
-`routes/hello/index.go`
-
-```go
-package hello
-
-import rstf "github.com/rafbgarcia/rstf"
-
-type ServerData struct {
-	Message string `json:"message"`
-}
-
-func SSR(ctx *rstf.Context) ServerData {
-	return ServerData{Message: "Hello from Go"}
-}
-```
-
-`routes/hello/index.tsx`
-
-```tsx
-import { serverData } from "@rstf/routes/hello";
-
-export function View() {
-  const { message } = serverData();
-  return <h1>{message}</h1>;
-}
-```
-
-## Run The App
-
-From your app root:
+## Create An App
 
 ```bash
+rstf init my-app
+```
+
+That command:
+
+- creates `./my-app`
+- writes `go.mod`, `package.json`, `tsconfig.json`, `main.go`, `main.tsx`, and demo routes
+- installs the app's npm dependencies
+- generates the initial `rstf/` tree
+- leaves the app ready for `rstf dev`
+
+By default the app's Go module matches the directory name. To override it:
+
+```bash
+rstf init my-app --module github.com/acme/my-app
+```
+
+The generated `go.mod` includes a local `replace` directive pointing back to this framework checkout. That is the current intended workflow while `rstf` is still evolving.
+
+## Start The Dev Server
+
+```bash
+cd my-app
 rstf dev
 ```
 
-That does the current dev loop:
+The generated demo includes:
 
-- generates `.rstf/`
-- bundles route entries
-- starts the Go server
-- starts the React SSR sidecar
-- watches `.go`, `.tsx`, and `main.css`
+- `/` for typed SSR and a shared server-data component
+- `/live-chat/studio` for a live query, mutation, and action flow
+- `/users/ada` for a dynamic route
 
 The default server port is `3000`.
 
-## CSS
+## Route Naming
 
-If the app has a `main.css`, `rstf dev` will build and serve it automatically.
+Route folders are flat and dot-separated. Dynamic params use a leading underscore.
 
-- if `postcss.config.mjs` exists, `rstf` runs PostCSS
-- otherwise `main.css` is copied as-is to `.rstf/static/main.css`
+Examples:
+
+- `routes/index/index.go` -> `/`
+- `routes/users._id/index.go` -> `/users/{id}`
+- `routes/users._id.edit/index.go` -> `/users/{id}/edit`
+- `routes/dashboard.active-users/index.go` -> `/dashboard/active-users`
 
 ## Generated Files
 
-The `.rstf/` directory is generated output. Important pieces are:
+`rstf/` is generated output. Important files and directories include:
 
-- `.rstf/generated/routes.ts`: TypeScript route helpers and live RPC descriptors
-- `.rstf/generated/<path>.ts`: generated runtime modules
-- `.rstf/types/*.d.ts`: generated TypeScript namespaces from Go types
-- `.rstf/routes/routes_gen.go`: generated Go route and query helper package, imported as `your-module/.rstf/routes`
-- `.rstf/server_gen.go`: generated Go server entrypoint
+- `rstf/generated/routes.ts`: TypeScript route helpers and live RPC descriptors
+- `rstf/generated/<path>.ts`: generated runtime modules for route and shared server data
+- `rstf/types/*.d.ts`: generated TypeScript types from Go data contracts
+- `rstf/routes/routes_gen.go`: generated Go route helper package, imported as `your-module/rstf/routes`
+- `rstf/server_gen.go`: generated Go server entrypoint
+- `rstf/static/*`: client bundles and built CSS
 
 Do not edit generated files directly.
 
+## Styling
+
+`rstf init` installs Tailwind v4 and generates a light default theme in `main.css`.
+
+When `main.css` exists:
+
+- `rstf dev` builds and serves `rstf/static/main.css`
+- `rstf build` includes the built CSS in `dist/rstf/static/main.css`
+
+If `postcss.config.mjs` exists, `rstf` runs PostCSS. Otherwise `main.css` is copied as-is.
+
+## Build For Deployment
+
+From the app root:
+
+```bash
+rstf build
+cd dist
+./my-app
+```
+
+`rstf build` creates a deployable directory that contains:
+
+- the Go binary
+- the generated `rstf/` tree
+- client assets
+- the app source files the runtime still expects
+- the app's `node_modules`
+
+The startup command is executing the Go binary from `dist/`.
+
 ## Next Steps
 
+- [CLI: init](/Users/rafa/github.com/rafbgarcia/rstf/user-docs/cli-init.md)
+- [CLI: dev](/Users/rafa/github.com/rafbgarcia/rstf/user-docs/cli-dev.md)
+- [CLI: build](/Users/rafa/github.com/rafbgarcia/rstf/user-docs/cli-build.md)
 - [Routing and Server Data](/Users/rafa/github.com/rafbgarcia/rstf/user-docs/routing-and-server-data.md)
 - [Live Queries](/Users/rafa/github.com/rafbgarcia/rstf/user-docs/live-queries.md)

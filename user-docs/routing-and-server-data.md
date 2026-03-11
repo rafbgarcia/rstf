@@ -10,9 +10,9 @@ Examples:
 
 - `routes/index` -> `/`
 - `routes/get-vs-ssr` -> `/get-vs-ssr`
-- `routes/users.$id` -> `/users/{id}`
+- `routes/users._id` -> `/users/{id}`
 
-Dynamic segments use `$name` in the directory name.
+Dynamic segments use `_name` in the directory name.
 
 ## Route Files
 
@@ -99,13 +99,13 @@ TypeScript:
 ```tsx
 import { routes } from "@rstf/routes";
 
-routes["users.$id"].url({ id: "123" });
+routes["users._id"].url({ id: "123" });
 ```
 
 Go:
 
 ```go
-import "example.com/my-app/.rstf/routes"
+import "example.com/my-app/rstf/routes"
 
 url := routes.UsersDotId.URL(routes.UsersDotIdParams{Id: "123"})
 ```
