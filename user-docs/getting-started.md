@@ -4,20 +4,13 @@ This guide gets a new `rstf` app running with the current standalone-app workflo
 
 ## Prerequisites
 
-- Go `1.24`
-- Node.js with npm
-- a local checkout of this repository
-
-Install the CLI from the framework repo root:
-
-```bash
-go install ./cmd/rstf
-```
+- Go `1.24.x`
+- Node.js `24.x`
 
 ## Create An App
 
 ```bash
-rstf init my-app
+npm create rstf@latest my-app
 ```
 
 That command:
@@ -26,21 +19,21 @@ That command:
 - writes `go.mod`, `package.json`, `tsconfig.json`, `main.go`, `main.tsx`, and demo routes
 - installs the app's npm dependencies
 - generates the initial `rstf/` tree
-- leaves the app ready for `rstf dev`
+- leaves the app ready for `npm run dev`
 
 By default the app's Go module matches the directory name. To override it:
 
 ```bash
-rstf init my-app --module github.com/acme/my-app
+npm create rstf@latest my-app -- --module github.com/acme/my-app
 ```
 
-The generated `go.mod` includes a local `replace` directive pointing back to this framework checkout. That is the current intended workflow while `rstf` is still evolving.
+`bunx create-rstf@latest my-app` works too.
 
 ## Start The Dev Server
 
 ```bash
 cd my-app
-rstf dev
+npm run dev
 ```
 
 The generated demo includes:
@@ -91,7 +84,7 @@ If `postcss.config.mjs` exists, `rstf` runs PostCSS. Otherwise `main.css` is cop
 From the app root:
 
 ```bash
-rstf build
+npm run build
 cd dist
 ./my-app
 ```

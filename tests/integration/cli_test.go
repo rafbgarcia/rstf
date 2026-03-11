@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rafbgarcia/rstf/internal/release"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,12 +89,13 @@ func TestCLIInitScaffoldsApp(t *testing.T) {
 	goMod, err := os.ReadFile(filepath.Join(appDir, "go.mod"))
 	require.NoError(t, err)
 	assert.Contains(t, string(goMod), "module example.com/sunroom")
-	assert.Contains(t, string(goMod), "replace github.com/rafbgarcia/rstf => "+repoRoot(t))
+	assert.Contains(t, string(goMod), "require github.com/rafbgarcia/rstf "+release.ModuleVersion)
+	assert.NotContains(t, string(goMod), "replace github.com/rafbgarcia/rstf =>")
 
 	packageJSON, err := os.ReadFile(filepath.Join(appDir, "package.json"))
 	require.NoError(t, err)
 	assert.Contains(t, string(packageJSON), "\"tailwindcss\"")
-	assert.Contains(t, string(packageJSON), "\"tsx\"")
+	assert.Contains(t, string(packageJSON), "\"@rstf/cli\": \""+release.Version+"\"")
 	assert.Contains(t, string(packageJSON), "\"build\": \"rstf build\"")
 }
 
@@ -102,6 +104,7 @@ func TestCLIBuildProducesRunnableDist(t *testing.T) {
 
 	initCmd := exec.Command(rstfBinary(t), "init", appDir, "--module", "example.com/sunroom", "--skip-install")
 	initCmd.Dir = repoRoot(t)
+	initCmd.Env = scaffoldLocalReleaseEnv(t)
 	initOut, err := initCmd.CombinedOutput()
 	require.NoErrorf(t, err, "rstf init failed:\n%s", initOut)
 
@@ -118,8 +121,9 @@ func TestCLIBuildProducesRunnableDist(t *testing.T) {
 	goModTidy.Stderr = os.Stderr
 	require.NoError(t, goModTidy.Run())
 
-	buildCmd := exec.Command(rstfBinary(t), "build")
+	buildCmd := exec.Command("npm", "run", "build")
 	buildCmd.Dir = appDir
+	buildCmd.Env = append(os.Environ(), "RSTF_CLI_LOCAL_BINARY="+rstfBinary(t))
 	buildOut, err := buildCmd.CombinedOutput()
 	require.NoErrorf(t, err, "rstf build failed:\n%s", buildOut)
 

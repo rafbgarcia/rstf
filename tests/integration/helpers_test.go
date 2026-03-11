@@ -24,6 +24,17 @@ var (
 	testProjectRootErr  error
 )
 
+func scaffoldLocalReleaseEnv(t *testing.T) []string {
+	t.Helper()
+
+	repo := repoRoot(t)
+	return append(
+		os.Environ(),
+		"RSTF_SCAFFOLD_FRAMEWORK_REPLACE="+repo,
+		"RSTF_SCAFFOLD_CLI_PACKAGE=file:"+filepath.Join(repo, "packages", "cli"),
+	)
+}
+
 func testProjectRoot() string {
 	testProjectRootOnce.Do(func() {
 		testProjectRootDir, testProjectRootErr = cloneTestProject(testProjectFixtureRoot())
@@ -121,6 +132,14 @@ func installTestProjectDependencies(dir string) error {
 		"npm_config_fund=false",
 		"npm_config_audit=false",
 	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func tidyGoModule(dir string) error {
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

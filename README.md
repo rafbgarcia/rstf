@@ -6,35 +6,27 @@ _This project is under active development and not recommended for production use
 
 ## Current Workflow
 
-Today the framework is designed to be used from a local checkout of this repository.
+Today the intended public workflow is:
 
-1. Install the `rstf` CLI from this repo.
-2. Run `rstf init <name>` to create a full app.
-3. Use `rstf dev` for the local loop.
-4. Use `rstf build` to produce a deployable `dist/` directory.
-5. Start production by executing the Go binary inside `dist/`.
-
-Generated apps are currently wired back to your local checkout with a `replace github.com/rafbgarcia/rstf => /path/to/rstf` entry in `go.mod`. That is intentional while the framework is still greenfield.
+1. Run `npm create rstf@latest <name>` to scaffold a full app.
+2. Use `npm run dev` for the local loop.
+3. Use `npm run build` to produce a deployable `dist/` directory.
+4. Start production by executing the Go binary inside `dist/`.
 
 ## Prerequisites
 
-- Go `1.24`
-- Node.js with npm
-- a local checkout of this repository
-
-From the framework repo root:
-
-```bash
-go install ./cmd/rstf
-```
+- Go `1.24.x`
+- Node.js `24.x`
 
 ## Quick Start
 
 ```bash
-rstf init my-app
+npm create rstf@latest my-app
 cd my-app
-rstf dev
+npm run dev
 ```
+
+`bunx create-rstf@latest my-app` also works, and scaffolded apps run through `bun run dev` / `bun run build` because they use local package scripts.
 
 The generated app includes:
 
@@ -47,7 +39,7 @@ The generated app includes:
 Build output goes to `dist/`:
 
 ```bash
-rstf build
+npm run build
 cd dist
 ./my-app
 ```

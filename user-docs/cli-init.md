@@ -1,12 +1,12 @@
 # `rstf init`
 
-`rstf init <name>` creates a new `rstf` app in a new directory.
+`rstf init <name>` creates a new `rstf` app in a new directory. The public entrypoint is `npm create rstf@latest`.
 
 ## Usage
 
 ```bash
-rstf init my-app
-rstf init my-app --module github.com/acme/my-app
+npm create rstf@latest my-app
+npm create rstf@latest my-app -- --module github.com/acme/my-app
 ```
 
 `<name>` is the destination directory and default app/module name.
@@ -25,7 +25,7 @@ The scaffold is not a toy. It includes:
 - `package.json`, `tsconfig.json`, and `go.mod`
 - an initial generated `rstf/` tree
 
-The generated app is wired to the current local framework checkout with a `replace github.com/rafbgarcia/rstf => /path/to/rstf` entry in `go.mod`.
+The generated app pins a released `github.com/rafbgarcia/rstf` Go module version and a matching local `@rstf/cli` package version.
 
 ## Flags
 
@@ -34,9 +34,9 @@ The generated app is wired to the current local framework checkout with a `repla
 
 ## Result
 
-After a normal `rstf init my-app`, the app is ready for:
+After a normal `npm create rstf@latest my-app`, the app is ready for:
 
 ```bash
 cd my-app
-rstf dev
+npm run dev
 ```

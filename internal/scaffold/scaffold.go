@@ -6,23 +6,25 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"text/template"
 	"unicode"
 
 	"github.com/rafbgarcia/rstf/internal/codegen"
+	"github.com/rafbgarcia/rstf/internal/release"
 )
 
-const goVersion = "1.24.6"
-
 type Config struct {
-	Name          string
-	DisplayName   string
-	Module        string
-	PackageName   string
-	FrameworkPath string
-	TargetDir     string
+	Name             string
+	DisplayName      string
+	Module           string
+	PackageName      string
+	TargetDir        string
+	FrameworkModule  string
+	FrameworkVersion string
+	FrameworkReplace string
+	CLIPackage       string
+	CLIRef           string
 }
 
 type Options struct {
@@ -80,13 +82,19 @@ func DeriveConfig(name string, module string) (Config, error) {
 		return Config{}, fmt.Errorf("could not derive a valid Go package name from %q", baseName)
 	}
 
+	releaseCfg := release.CurrentScaffoldConfig()
+
 	return Config{
-		Name:          baseName,
-		DisplayName:   humanizeName(baseName),
-		Module:        moduleName,
-		PackageName:   packageName,
-		FrameworkPath: frameworkRoot(),
-		TargetDir:     targetDir,
+		Name:             baseName,
+		DisplayName:      humanizeName(baseName),
+		Module:           moduleName,
+		PackageName:      packageName,
+		TargetDir:        targetDir,
+		FrameworkModule:  releaseCfg.FrameworkModule,
+		FrameworkVersion: releaseCfg.FrameworkRef,
+		FrameworkReplace: releaseCfg.FrameworkReplace,
+		CLIPackage:       releaseCfg.CLIPackage,
+		CLIRef:           releaseCfg.CLIRef,
 	}, nil
 }
 
@@ -184,11 +192,6 @@ func runCommand(dir string, name string, args ...string) error {
 	return nil
 }
 
-func frameworkRoot() string {
-	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Dir(filepath.Dir(filepath.Dir(filename)))
-}
-
 func humanizeName(name string) string {
 	replacer := strings.NewReplacer("-", " ", "_", " ", ".", " ")
 	parts := strings.Fields(replacer.Replace(name))
@@ -231,11 +234,13 @@ node_modules/
 
 const goModTemplate = `module {{ .Module }}
 
-go ` + goVersion + `
+go ` + release.GoVersion + `
 
-require github.com/rafbgarcia/rstf v0.0.0
+require {{ .FrameworkModule }} {{ .FrameworkVersion }}
 
-replace github.com/rafbgarcia/rstf => {{ .FrameworkPath }}
+{{- if .FrameworkReplace }}
+replace {{ .FrameworkModule }} => {{ .FrameworkReplace }}
+{{- end }}
 `
 
 const packageJSONTemplate = `{
@@ -248,10 +253,10 @@ const packageJSONTemplate = `{
   },
   "dependencies": {
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "tsx": "^4.21.0"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "{{ .CLIPackage }}": "{{ .CLIRef }}",
     "@tailwindcss/postcss": "^4.2.1",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

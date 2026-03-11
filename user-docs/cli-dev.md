@@ -1,12 +1,12 @@
 # `rstf dev`
 
-`rstf dev` runs the local development loop from the app root.
+`rstf dev` runs the local development loop from the app root. In a scaffolded app, use it through `npm run dev` or `bun run dev`.
 
 ## Usage
 
 ```bash
-rstf dev
-rstf dev --port 4000
+npm run dev
+npm run dev -- --port 4000
 ```
 
 ## What It Does
@@ -27,6 +27,7 @@ The default HTTP port is `3000`.
 The dev runtime is app-owned:
 
 - React and React DOM are bundled from the app's dependencies
+- the `rstf` executable comes from the app's local `@rstf/cli` package
 - generated files live in the app's `rstf/` directory
 - the embedded renderer loads SSR bundles from `rstf/ssr/`
 

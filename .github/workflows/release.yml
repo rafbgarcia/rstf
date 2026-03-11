@@ -1,0 +1,81 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: Verify release versions
+        run: |
+          test "${GITHUB_REF_NAME}" = "$(node -p "require('./packages/cli/package.json').rstf.goVersion")"
+          test "${GITHUB_REF_NAME#v}" = "$(go run ./cmd/rstf version)"
+          test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./packages/cli/package.json').version")"
+          test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./packages/create-rstf/package.json').version")"
+      - name: Test
+        run: go test ./...
+
+  build-cli:
+    needs: verify
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          go build -o "dist/rstf-${{ matrix.goos }}-${{ matrix.goarch }}" ./cmd/rstf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rstf-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/rstf-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  publish-npm:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: Publish @rstf/cli
+        working-directory: packages/cli
+        run: npm publish --access public
+      - name: Publish create-rstf
+        working-directory: packages/create-rstf
+        run: npm publish --access public

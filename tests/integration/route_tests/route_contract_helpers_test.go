@@ -43,6 +43,10 @@ func ensureRouteContractServerRunning(t *testing.T) string {
 			routeServerErr = err
 			return
 		}
+		if err := tidyGoModule(root); err != nil {
+			routeServerErr = err
+			return
+		}
 		if err := bundler.BundleEntries(root, result.Entries); err != nil {
 			routeServerErr = err
 			return
@@ -211,6 +215,14 @@ func installTestProjectDependencies(dir string) error {
 		"npm_config_fund=false",
 		"npm_config_audit=false",
 	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func tidyGoModule(dir string) error {
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

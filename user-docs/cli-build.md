@@ -1,11 +1,11 @@
 # `rstf build`
 
-`rstf build` creates a deployable `dist/` directory from the app root.
+`rstf build` creates a deployable `dist/` directory from the app root. In a scaffolded app, use it through `npm run build` or `bun run build`.
 
 ## Usage
 
 ```bash
-rstf build
+npm run build
 ```
 
 ## What It Produces
@@ -23,7 +23,7 @@ The binary name matches the app directory name.
 From the app root:
 
 ```bash
-rstf build
+npm run build
 cd dist
 ./my-app
 ```

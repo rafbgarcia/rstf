@@ -28,6 +28,7 @@ func TestHydration(t *testing.T) {
 	result, err := codegen.Generate(root)
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
+	require.NoError(t, tidyGoModule(root))
 
 	// Step 2: Bundle client JS for each entry.
 	require.NoError(t, bundler.BundleEntries(root, result.Entries))
@@ -99,6 +100,7 @@ func TestLiveQueryUpdatesAcrossClients(t *testing.T) {
 	result, err := codegen.Generate(root)
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
+	require.NoError(t, tidyGoModule(root))
 
 	require.NoError(t, bundler.BundleEntries(root, result.Entries))
 	require.NoError(t, bundler.BundleSSREntries(root, result.SSREntries))
@@ -179,6 +181,7 @@ func TestCSS(t *testing.T) {
 	result, err := codegen.Generate(root)
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
+	require.NoError(t, tidyGoModule(root))
 
 	// Step 2: Bundle client JS.
 	require.NoError(t, bundler.BundleEntries(root, result.Entries))

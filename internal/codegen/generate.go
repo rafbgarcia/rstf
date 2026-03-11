@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -638,31 +637,8 @@ func routeArtifactName(name string) string {
 	return strings.Join(segments, "-")
 }
 
-// ensureDeps runs `go get` for framework packages that the generated
-// server_gen.go imports when they are not already resolved in the app module.
-// This keeps go.sum consistent for generated entrypoints and framework helpers.
 func ensureDeps(projectRoot, modulePath string) error {
-	// Developing the framework itself — sub-packages are local.
-	if modulePath == frameworkModule {
-		return nil
-	}
-
-	// Required runtime deps already in go.sum — deps are resolved.
-	if sumContent, err := os.ReadFile(filepath.Join(projectRoot, "go.sum")); err == nil {
-		sumStr := string(sumContent)
-		if strings.Contains(sumStr, frameworkModule+" ") && strings.Contains(sumStr, "rogchap.com/v8go ") {
-			return nil
-		}
-	}
-
-	cmd := exec.Command("go", "get",
-		frameworkModule+"/renderer",
-		frameworkModule+"/router",
-		"rogchap.com/v8go",
-	)
-	cmd.Dir = projectRoot
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("resolving framework deps: %s\n%s", err, out)
-	}
+	_ = projectRoot
+	_ = modulePath
 	return nil
 }

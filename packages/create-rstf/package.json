@@ -1,0 +1,18 @@
+{
+  "name": "create-rstf",
+  "version": "0.1.0-alpha.1",
+  "description": "Create a new rstf app",
+  "bin": {
+    "create-rstf": "./bin/create-rstf.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "rstf": {
+    "goPackage": "github.com/rafbgarcia/rstf/cmd/rstf",
+    "goVersion": "v0.1.0-alpha.1"
+  }
+}
