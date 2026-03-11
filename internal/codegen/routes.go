@@ -181,6 +181,12 @@ func GenerateRoutesGo(routeDefs []RouteDef) string {
 		b.WriteString("func (q QueryKey[P]) Key(params P) rstf.SubscriptionKey {\n")
 		b.WriteString("\treturn q.build(params)\n")
 		b.WriteString("}\n\n")
+		b.WriteString("func (q QueryKey[P]) Invalidate(ctx *rstf.MutationContext, params P) {\n")
+		b.WriteString("\tif ctx == nil {\n")
+		b.WriteString("\t\treturn\n")
+		b.WriteString("\t}\n")
+		b.WriteString("\tctx.Invalidate(q.Key(params))\n")
+		b.WriteString("}\n\n")
 	}
 
 	for _, route := range routeDefs {

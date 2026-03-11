@@ -98,6 +98,7 @@ func TestCodegen(t *testing.T) {
 	assert.Contains(t, goRoutesStr, "func (UsersDotIdRoute) URL(params UsersDotIdParams) Location {")
 	assert.Contains(t, goRoutesStr, "var UsersDotId UsersDotIdRoute")
 	assert.Contains(t, goRoutesStr, `return Location("/users/" + url.PathEscape(params.Id))`)
+	assert.Contains(t, goRoutesStr, `func (q QueryKey[P]) Invalidate(ctx *rstf.MutationContext, params P) {`)
 	assert.Contains(t, goRoutesStr, `var LiveChatDotIdGetMessages = QueryKey[LiveChatDotIdParams]{`)
 
 	// Verify server_gen.go content.

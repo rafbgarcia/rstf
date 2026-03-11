@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	rstf "github.com/rafbgarcia/rstf"
+	"github.com/rafbgarcia/rstf/tests/integration/test_project/.rstf/routes"
 )
 
 type Message struct {
@@ -42,7 +43,7 @@ func SendMessage(ctx *rstf.MutationContext, input SendMessageInput) error {
 		Body: strings.TrimSpace(input.Body),
 	})
 
-	ctx.Invalidate(rstf.NewSubscriptionKey("live-chat.$id", "GetMessages", map[string]string{"id": roomID}))
+	routes.LiveChatDotIdGetMessages.Invalidate(ctx, routes.LiveChatDotIdParams{Id: roomID})
 	return nil
 }
 

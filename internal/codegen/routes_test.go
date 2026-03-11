@@ -126,6 +126,7 @@ func TestGenerateRoutesGo(t *testing.T) {
 		"func (UsersDotIdRoute) URL(params UsersDotIdParams) Location {",
 		"var UsersDotId UsersDotIdRoute",
 		`type QueryKey[P any] struct {`,
+		`func (q QueryKey[P]) Invalidate(ctx *rstf.MutationContext, params P) {`,
 		`return rstf.NewSubscriptionKey("users.$id", "GetMessages", map[string]string{"id": params.Id})`,
 		"var UsersDotIdGetMessages = QueryKey[UsersDotIdParams]{",
 	} {
