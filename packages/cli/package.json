@@ -1,18 +1,31 @@
 {
   "name": "@rstf/cli",
   "version": "0.1.0-alpha.1",
-  "description": "Project-local rstf CLI wrapper",
+  "description": "Project-local rstf CLI",
   "bin": {
     "rstf": "./bin/rstf.js"
   },
+  "scripts": {
+    "postinstall": "node ./scripts/install.js"
+  },
   "files": [
-    "bin"
+    "bin",
+    "scripts"
   ],
   "engines": {
     "node": ">=24"
   },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "arm64",
+    "x64"
+  ],
   "rstf": {
     "goPackage": "github.com/rafbgarcia/rstf/cmd/rstf",
-    "goVersion": "v0.1.0-alpha.1"
+    "goVersion": "v0.1.0-alpha.1",
+    "repo": "rafbgarcia/rstf"
   }
 }

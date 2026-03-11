@@ -11,8 +11,7 @@
   "engines": {
     "node": ">=24"
   },
-  "rstf": {
-    "goPackage": "github.com/rafbgarcia/rstf/cmd/rstf",
-    "goVersion": "v0.1.0-alpha.1"
+  "dependencies": {
+    "@rstf/cli": "0.1.0-alpha.1"
   }
 }

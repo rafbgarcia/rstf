@@ -27,7 +27,7 @@ The default HTTP port is `3000`.
 The dev runtime is app-owned:
 
 - React and React DOM are bundled from the app's dependencies
-- the `rstf` executable comes from the app's local `@rstf/cli` package
+- the `rstf` executable comes from the app's local `@rstf/cli` package, which installs the matching macOS/Linux binary during `npm install`
 - generated files live in the app's `rstf/` directory
 - the embedded renderer loads SSR bundles from `rstf/ssr/`
 

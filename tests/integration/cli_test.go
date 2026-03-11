@@ -110,7 +110,13 @@ func TestCLIBuildProducesRunnableDist(t *testing.T) {
 
 	npmInstall := exec.Command("npm", "install")
 	npmInstall.Dir = appDir
-	npmInstall.Env = append(os.Environ(), "NO_UPDATE_NOTIFIER=1", "npm_config_fund=false", "npm_config_audit=false")
+	npmInstall.Env = append(
+		os.Environ(),
+		"NO_UPDATE_NOTIFIER=1",
+		"npm_config_fund=false",
+		"npm_config_audit=false",
+		"RSTF_CLI_SKIP_INSTALL=1",
+	)
 	npmInstall.Stdout = os.Stdout
 	npmInstall.Stderr = os.Stderr
 	require.NoError(t, npmInstall.Run())

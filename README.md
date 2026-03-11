@@ -28,6 +28,8 @@ npm run dev
 
 `bunx create-rstf@latest my-app` also works, and scaffolded apps run through `bun run dev` / `bun run build` because they use local package scripts.
 
+During `npm install`, the app-local `@rstf/cli` package downloads the matching `rstf` binary for macOS or Linux.
+
 The generated app includes:
 
 - a typed SSR home route
