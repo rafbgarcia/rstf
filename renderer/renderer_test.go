@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,6 +46,10 @@ func ensureLocalNodeModules(t *testing.T) {
 func startRenderer(t *testing.T) *Renderer {
 	t.Helper()
 	ensureLocalNodeModules(t)
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Join(testdataDir(), "rstf", "ssr")) })
+	require.NoError(t, bundler.BundleSSREntries(testdataDir(), map[string]string{
+		"hello/hello": filepath.Join(testdataDir(), "rstf", "ssr_entries", "hello-hello.ssr.tsx"),
+	}))
 	r := New()
 	require.NoError(t, r.Start(testdataDir()))
 	t.Cleanup(func() { r.Stop() })
@@ -53,9 +58,13 @@ func startRenderer(t *testing.T) *Renderer {
 
 func TestStartStop(t *testing.T) {
 	ensureLocalNodeModules(t)
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Join(testdataDir(), "rstf", "ssr")) })
+	require.NoError(t, bundler.BundleSSREntries(testdataDir(), map[string]string{
+		"hello/hello": filepath.Join(testdataDir(), "rstf", "ssr_entries", "hello-hello.ssr.tsx"),
+	}))
 	r := New()
 	require.NoError(t, r.Start(testdataDir()))
-	require.NotZero(t, r.port)
+	require.NotNil(t, r.iso)
 	require.NoError(t, r.Stop())
 }
 
@@ -121,7 +130,7 @@ func TestRenderMissingComponent(t *testing.T) {
 		},
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Component not found")
+	assert.Contains(t, err.Error(), "missing SSR bundle")
 }
 
 func TestRenderNoViewExport(t *testing.T) {
@@ -135,7 +144,7 @@ func TestRenderNoViewExport(t *testing.T) {
 		},
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "does not export View")
+	assert.Contains(t, err.Error(), "missing SSR bundle")
 }
 
 func TestRenderNoServerData(t *testing.T) {

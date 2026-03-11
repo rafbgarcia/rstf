@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/rafbgarcia/rstf/internal/codegen"
 	"github.com/rafbgarcia/rstf/renderer"
 	"github.com/stretchr/testify/assert"
@@ -16,11 +17,12 @@ func TestEndToEnd(t *testing.T) {
 	root := testProjectRoot()
 
 	// Step 1: Run codegen.
-	_, err := codegen.Generate(root)
+	result, err := codegen.Generate(root)
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
+	require.NoError(t, bundler.BundleSSREntries(root, result.SSREntries))
 
-	// Step 2: Start the renderer sidecar.
+	// Step 2: Start the embedded renderer.
 	r := renderer.New()
 	require.NoError(t, r.Start(root))
 	t.Cleanup(func() { r.Stop() })

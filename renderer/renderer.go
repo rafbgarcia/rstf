@@ -1,156 +1,127 @@
 package renderer
 
 import (
-	"bufio"
-	"bytes"
-	_ "embed"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"rogchap.com/v8go"
 )
 
-//go:embed ssr.ts
-var ssrRuntimeSource []byte
+const bootstrapSource = `
+globalThis.__RSTF_RENDERERS__ = globalThis.__RSTF_RENDERERS__ || {};
+
+if (typeof MessageChannel === "undefined") {
+  class RSTFMessagePort {
+    constructor() {
+      this.onmessage = null;
+      this._target = null;
+    }
+    postMessage(message) {
+      const target = this._target;
+      if (!target || typeof target.onmessage !== "function") {
+        return;
+      }
+      Promise.resolve().then(() => target.onmessage({ data: message }));
+    }
+    start() {}
+    close() {}
+  }
+
+  globalThis.MessageChannel = class MessageChannel {
+    constructor() {
+      this.port1 = new RSTFMessagePort();
+      this.port2 = new RSTFMessagePort();
+      this.port1._target = this.port2;
+      this.port2._target = this.port1;
+    }
+  };
+}
+
+if (typeof TextEncoder === "undefined") {
+  globalThis.TextEncoder = class TextEncoder {
+    encode(input = "") {
+      const bytes = [];
+      for (const char of String(input)) {
+        const code = char.codePointAt(0);
+        if (code <= 0x7f) {
+          bytes.push(code);
+        } else if (code <= 0x7ff) {
+          bytes.push(0xc0 | (code >> 6));
+          bytes.push(0x80 | (code & 0x3f));
+        } else if (code <= 0xffff) {
+          bytes.push(0xe0 | (code >> 12));
+          bytes.push(0x80 | ((code >> 6) & 0x3f));
+          bytes.push(0x80 | (code & 0x3f));
+        } else {
+          bytes.push(0xf0 | (code >> 18));
+          bytes.push(0x80 | ((code >> 12) & 0x3f));
+          bytes.push(0x80 | ((code >> 6) & 0x3f));
+          bytes.push(0x80 | (code & 0x3f));
+        }
+      }
+      return Uint8Array.from(bytes);
+    }
+  };
+}
+`
 
 type Renderer struct {
-	port int
-	cmd  *exec.Cmd
+	root string
+
+	mu            sync.Mutex
+	iso           *v8go.Isolate
+	ctx           *v8go.Context
+	loadedBundles map[string]time.Time
 }
 
 func New() *Renderer {
-	return &Renderer{}
+	return &Renderer{
+		loadedBundles: map[string]time.Time{},
+	}
 }
 
-// Start spawns the Node sidecar process and waits for it to report its port.
+// Start initializes the embedded V8 runtime and records the project root for
+// lazy SSR bundle loading.
 func (r *Renderer) Start(projectRoot string) error {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return fmt.Errorf("renderer: resolve project root: %w", err)
 	}
 
-	ssrPath, err := ensureProjectRuntime(absRoot)
-	if err != nil {
-		return err
-	}
-	loaderPath, err := resolveProjectTSXLoader(absRoot)
-	if err != nil {
-		return err
-	}
-
-	r.cmd = exec.Command("node", "--import", loaderPath, ssrPath, "--project-root", absRoot)
-	r.cmd.Dir = absRoot
-	r.cmd.Env = append(os.Environ(), "NO_COLOR=1")
-	r.cmd.Stderr = os.Stderr
-
-	stdout, err := r.cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("renderer: stdout pipe: %w", err)
+	iso := v8go.NewIsolate()
+	ctx := v8go.NewContext(iso)
+	if _, err := ctx.RunScript(bootstrapSource, "bootstrap.js"); err != nil {
+		ctx.Close()
+		iso.Dispose()
+		return fmt.Errorf("renderer: bootstrap runtime: %w", err)
 	}
 
-	if err := r.cmd.Start(); err != nil {
-		return fmt.Errorf("renderer: start node: %w", err)
-	}
-
-	// Read the port from the first line of stdout with a timeout.
-	portCh := make(chan int, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		if scanner.Scan() {
-			port, err := strconv.Atoi(strings.TrimSpace(scanner.Text()))
-			if err != nil {
-				errCh <- fmt.Errorf("renderer: invalid port %q: %w", scanner.Text(), err)
-				return
-			}
-			portCh <- port
-		} else {
-			errCh <- fmt.Errorf("renderer: sidecar closed stdout without printing port")
-		}
-	}()
-
-	select {
-	case port := <-portCh:
-		r.port = port
-		// Write port to file so the CLI watcher can invalidate the sidecar cache.
-		os.WriteFile(filepath.Join(absRoot, "rstf", "sidecar.port"), []byte(strconv.Itoa(port)), 0644)
-	case err := <-errCh:
-		r.cmd.Process.Kill()
-		return err
-	case <-time.After(10 * time.Second):
-		r.cmd.Process.Kill()
-		return fmt.Errorf("renderer: timed out waiting for sidecar port")
-	}
-
+	r.root = absRoot
+	r.iso = iso
+	r.ctx = ctx
+	r.loadedBundles = map[string]time.Time{}
 	return nil
 }
 
-func ensureProjectRuntime(projectRoot string) (string, error) {
-	runtimeDir := filepath.Join(projectRoot, "rstf", "runtime")
-	if err := os.MkdirAll(runtimeDir, 0755); err != nil {
-		return "", fmt.Errorf("renderer: create runtime dir: %w", err)
-	}
-
-	ssrPath := filepath.Join(runtimeDir, "ssr.ts")
-	if err := os.WriteFile(ssrPath, ssrRuntimeSource, 0644); err != nil {
-		return "", fmt.Errorf("renderer: write ssr runtime: %w", err)
-	}
-
-	return ssrPath, nil
-}
-
-func resolveProjectTSXLoader(projectRoot string) (string, error) {
-	loaderPath := filepath.Join(projectRoot, "node_modules", "tsx", "dist", "loader.mjs")
-	if _, err := os.Stat(loaderPath); err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf(
-				"renderer: missing app runtime dependency \"tsx\" at %s; run npm install in %s",
-				loaderPath,
-				projectRoot,
-			)
-		}
-		return "", fmt.Errorf("renderer: stat tsx loader: %w", err)
-	}
-	return loaderPath, nil
-}
-
-// Stop sends SIGINT to the sidecar and waits for it to exit.
+// Stop tears down the embedded V8 runtime.
 func (r *Renderer) Stop() error {
-	if r.cmd == nil || r.cmd.Process == nil {
-		return nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.ctx != nil {
+		r.ctx.Close()
+		r.ctx = nil
 	}
-
-	if err := r.cmd.Process.Signal(os.Interrupt); err != nil {
-		// Process may have already exited.
-		return nil
+	if r.iso != nil {
+		r.iso.Dispose()
+		r.iso = nil
 	}
-
-	var once sync.Once
-	waitCh := make(chan struct{})
-	go func() {
-		once.Do(func() { _ = r.cmd.Wait() })
-		close(waitCh)
-	}()
-
-	select {
-	case <-waitCh:
-		return nil
-	case <-time.After(2 * time.Second):
-		// Fall back to force-kill to avoid hanging test/process shutdown.
-		_ = r.cmd.Process.Kill()
-	}
-
-	select {
-	case <-waitCh:
-	case <-time.After(2 * time.Second):
-	}
-
+	r.loadedBundles = map[string]time.Time{}
 	return nil
 }
 
@@ -162,33 +133,129 @@ type RenderRequest struct {
 	SSRProps  map[string]map[string]any `json:"ssrProps,omitempty"`
 }
 
-type renderResponse struct {
-	HTML  string `json:"html"`
-	Error string `json:"error"`
+// Render loads the route's SSR bundle into the embedded runtime and returns the
+// rendered HTML string.
+func (r *Renderer) Render(req RenderRequest) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.ctx == nil || r.iso == nil {
+		return "", fmt.Errorf("renderer: not started")
+	}
+
+	if err := r.ensureBundleLoaded(req.Component); err != nil {
+		return "", err
+	}
+
+	global := r.ctx.Global()
+	renderersValue, err := global.Get("__RSTF_RENDERERS__")
+	if err != nil {
+		return "", fmt.Errorf("renderer: read renderer registry: %w", err)
+	}
+	renderersObj, err := renderersValue.AsObject()
+	if err != nil {
+		return "", fmt.Errorf("renderer: renderer registry is not an object: %w", err)
+	}
+	renderFnValue, err := renderersObj.Get(req.Component)
+	if err != nil {
+		return "", fmt.Errorf("renderer: get renderer for %s: %w", req.Component, err)
+	}
+	if renderFnValue == nil || renderFnValue.IsUndefined() || renderFnValue.IsNull() {
+		return "", fmt.Errorf("renderer: no SSR bundle registered for %s", req.Component)
+	}
+	renderFn, err := renderFnValue.AsFunction()
+	if err != nil {
+		return "", fmt.Errorf("renderer: renderer for %s is not callable: %w", req.Component, err)
+	}
+
+	payload, err := json.Marshal(req.SSRProps)
+	if err != nil {
+		return "", fmt.Errorf("renderer: marshal SSR props: %w", err)
+	}
+	arg, err := v8go.JSONParse(r.ctx, string(payload))
+	if err != nil {
+		return "", fmt.Errorf("renderer: parse SSR props JSON: %w", err)
+	}
+
+	result, err := renderFn.Call(v8go.Undefined(r.iso), arg)
+	if err != nil {
+		return "", fmt.Errorf("renderer: render %s: %w", req.Component, err)
+	}
+	r.ctx.PerformMicrotaskCheckpoint()
+	return result.String(), nil
 }
 
-// Render sends a render request to the sidecar and returns the HTML string.
-func (r *Renderer) Render(req RenderRequest) (string, error) {
-	body, err := json.Marshal(req)
+func (r *Renderer) ensureBundleLoaded(routeDir string) error {
+	bundlePath := filepath.Join(r.root, routeSSRBundlePath(routeDir))
+	info, err := os.Stat(bundlePath)
 	if err != nil {
-		return "", fmt.Errorf("renderer: marshal request: %w", err)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("renderer: missing SSR bundle %s", bundlePath)
+		}
+		return fmt.Errorf("renderer: stat SSR bundle %s: %w", bundlePath, err)
 	}
 
-	url := fmt.Sprintf("http://localhost:%d/render", r.port)
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if loadedAt, ok := r.loadedBundles[routeDir]; ok {
+		if info.ModTime().Equal(loadedAt) {
+			return nil
+		}
+		// Bundle changed. Reset the context so dev reloads do not accumulate
+		// stale component code in the isolate.
+		if err := r.resetContext(); err != nil {
+			return err
+		}
+	}
+
+	source, err := os.ReadFile(bundlePath)
 	if err != nil {
-		return "", fmt.Errorf("renderer: POST /render: %w", err)
+		return fmt.Errorf("renderer: read SSR bundle %s: %w", bundlePath, err)
 	}
-	defer resp.Body.Close()
-
-	var result renderResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("renderer: decode response: %w", err)
+	if _, err := r.ctx.RunScript(string(source), bundlePath); err != nil {
+		return fmt.Errorf("renderer: load SSR bundle %s: %w", bundlePath, err)
 	}
 
-	if result.Error != "" {
-		return "", fmt.Errorf("renderer: %s", result.Error)
+	r.loadedBundles[routeDir] = info.ModTime()
+	return nil
+}
+
+func (r *Renderer) resetContext() error {
+	if r.ctx != nil {
+		r.ctx.Close()
+	}
+	if r.iso != nil {
+		r.iso.Dispose()
 	}
 
-	return result.HTML, nil
+	iso := v8go.NewIsolate()
+	ctx := v8go.NewContext(iso)
+	if _, err := ctx.RunScript(bootstrapSource, "bootstrap.js"); err != nil {
+		ctx.Close()
+		iso.Dispose()
+		return fmt.Errorf("renderer: bootstrap runtime: %w", err)
+	}
+
+	r.iso = iso
+	r.ctx = ctx
+	r.loadedBundles = map[string]time.Time{}
+	return nil
+}
+
+func routeSSRBundlePath(routeDir string) string {
+	return filepath.ToSlash(filepath.Join("rstf", "ssr", routeArtifactName(strings.TrimPrefix(routeDir, "routes/"))+".js"))
+}
+
+func routeArtifactName(name string) string {
+	segments := strings.FieldsFunc(name, func(r rune) bool {
+		return r == '.' || r == '/'
+	})
+	if len(segments) == 0 {
+		return name
+	}
+
+	for i, seg := range segments {
+		if len(seg) > 1 && strings.HasPrefix(seg, "_") {
+			segments[i] = seg[1:]
+		}
+	}
+	return strings.Join(segments, "-")
 }

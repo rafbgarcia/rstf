@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/rafbgarcia/rstf/internal/codegen"
 	"github.com/stretchr/testify/require"
 )
@@ -37,8 +38,17 @@ func ensureRouteContractServerRunning(t *testing.T) string {
 	routeServerOnce.Do(func() {
 		root := testProjectRoot()
 
-		_, routeServerErr = codegen.Generate(root)
-		if routeServerErr != nil {
+		result, err := codegen.Generate(root)
+		if err != nil {
+			routeServerErr = err
+			return
+		}
+		if err := bundler.BundleEntries(root, result.Entries); err != nil {
+			routeServerErr = err
+			return
+		}
+		if err := bundler.BundleSSREntries(root, result.SSREntries); err != nil {
+			routeServerErr = err
 			return
 		}
 

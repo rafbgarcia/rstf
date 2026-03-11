@@ -37,7 +37,7 @@ type routeEntry struct {
 
 // GenerateServer produces the content of rstf/server_gen.go — the Go entry
 // point that wires routes to handlers, calls route functions, and renders via
-// the Node sidecar.
+// the embedded JavaScript runtime.
 func GenerateServer(modulePath string, files []RouteFile, deps map[string][]string) (string, error) {
 	fileMap := map[string]RouteFile{}
 	for _, f := range files {

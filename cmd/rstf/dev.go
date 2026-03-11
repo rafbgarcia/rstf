@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -53,6 +51,14 @@ func runDev(port string) error {
 	if err := buildClientBundles(result); err != nil {
 		fmt.Println("FAILED")
 		return fmt.Errorf("bundling error: %w", err)
+	}
+	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
+
+	fmt.Print("  SSR bundles ..... ")
+	t = time.Now()
+	if err := buildSSRBundles(result); err != nil {
+		fmt.Println("FAILED")
+		return fmt.Errorf("SSR bundling error: %w", err)
 	}
 	fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 
@@ -158,6 +164,15 @@ func handleCodeChange(gen *codegen.Generator, server *exec.Cmd, result *codegen.
 		fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
 	}
 
+	fmt.Print("  SSR bundles ..... ")
+	t = time.Now()
+	if err := buildSSRBundles(regenResult.GenerateResult); err != nil {
+		fmt.Println("FAILED")
+		fmt.Fprintf(os.Stderr, "  SSR bundling error: %s\n", err)
+	} else {
+		fmt.Printf("done [%s]\n", fmtDuration(time.Since(t)))
+	}
+
 	if err := buildCSS(); err != nil {
 		fmt.Fprintf(os.Stderr, "  css error: %s\n", err)
 	}
@@ -169,8 +184,6 @@ func handleCodeChange(gen *codegen.Generator, server *exec.Cmd, result *codegen.
 		return startServer(port)
 	}
 
-	// TSX-only change with no server_gen.go diff — just invalidate sidecar.
-	invalidateSidecar()
 	return server
 }
 
@@ -207,6 +220,10 @@ func buildClientBundles(result codegen.GenerateResult) error {
 	return bundler.BundleEntries(".", result.Entries)
 }
 
+func buildSSRBundles(result codegen.GenerateResult) error {
+	return bundler.BundleSSREntries(".", result.SSREntries)
+}
+
 // stopServer kills the server's entire process group (go run + child binary),
 // then waits for the process to exit.
 func stopServer(cmd *exec.Cmd) {
@@ -216,17 +233,6 @@ func stopServer(cmd *exec.Cmd) {
 	// Kill the entire process group: negative PID targets the group.
 	syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	cmd.Wait()
-}
-
-// invalidateSidecar reads the sidecar port from rstf/sidecar.port and POSTs
-// to /invalidate to clear the module cache.
-func invalidateSidecar() {
-	data, err := os.ReadFile("rstf/sidecar.port")
-	if err != nil {
-		return // sidecar may not have written port yet
-	}
-	port := strings.TrimSpace(string(data))
-	http.Post("http://localhost:"+port+"/invalidate", "application/json", nil)
 }
 
 // fmtDuration formats a duration as a human-friendly string (e.g. "12ms", "1.3s").

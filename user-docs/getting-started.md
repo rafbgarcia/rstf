@@ -101,8 +101,7 @@ cd dist
 - the Go binary
 - the generated `rstf/` tree
 - client assets
-- the app source files the runtime still expects
-- the app's `node_modules`
+- per-route SSR bundles for the embedded renderer
 
 The startup command is executing the Go binary from `dist/`.
 

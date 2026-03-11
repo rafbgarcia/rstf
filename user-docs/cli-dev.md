@@ -15,9 +15,9 @@ On startup, `rstf dev`:
 
 1. generates the `rstf/` tree
 2. bundles client hydration entries into `rstf/static/`
-3. builds `main.css` when present
-4. starts the generated Go server
-5. starts the React SSR sidecar using the app's own `node_modules`
+3. bundles per-route SSR entries into `rstf/ssr/`
+4. builds `main.css` when present
+5. starts the generated Go server
 6. watches `.go`, `.tsx`, and `main.css`
 
 The default HTTP port is `3000`.
@@ -26,11 +26,9 @@ The default HTTP port is `3000`.
 
 The dev runtime is app-owned:
 
-- the SSR sidecar resolves `tsx` from the app's `node_modules`
-- React and React DOM come from the app
+- React and React DOM are bundled from the app's dependencies
 - generated files live in the app's `rstf/` directory
-
-That means a scaffolded app can run without relying on this repo's `node_modules`.
+- the embedded renderer loads SSR bundles from `rstf/ssr/`
 
 ## Generated Output
 
@@ -39,7 +37,9 @@ During development, `rstf dev` keeps these areas up to date:
 - `rstf/generated`
 - `rstf/types`
 - `rstf/entries`
+- `rstf/ssr_entries`
 - `rstf/routes`
+- `rstf/ssr`
 - `rstf/static`
 - `rstf/server_gen.go`
 

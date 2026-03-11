@@ -31,6 +31,7 @@ func TestHydration(t *testing.T) {
 
 	// Step 2: Bundle client JS for each entry.
 	require.NoError(t, bundler.BundleEntries(root, result.Entries))
+	require.NoError(t, bundler.BundleSSREntries(root, result.SSREntries))
 
 	// Step 3: Pick a free port.
 	port := freePort(t)
@@ -42,8 +43,7 @@ func TestHydration(t *testing.T) {
 		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
 	}
 
-	// Step 5: Start the compiled server. The generated server handles SIGINT
-	// gracefully — it stops the Node sidecar before exiting.
+	// Step 5: Start the compiled server.
 	server := exec.Command(filepath.Join(root, "rstf", "server"), "--port", port)
 	server.Dir = root
 	server.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -101,6 +101,7 @@ func TestLiveQueryUpdatesAcrossClients(t *testing.T) {
 	t.Cleanup(func() { os.RemoveAll(filepath.Join(root, "rstf")) })
 
 	require.NoError(t, bundler.BundleEntries(root, result.Entries))
+	require.NoError(t, bundler.BundleSSREntries(root, result.SSREntries))
 
 	port := freePort(t)
 	build := exec.Command("go", "build", "-o", filepath.Join(root, "rstf", "server"), "./rstf/server_gen.go")
@@ -181,6 +182,7 @@ func TestCSS(t *testing.T) {
 
 	// Step 2: Bundle client JS.
 	require.NoError(t, bundler.BundleEntries(root, result.Entries))
+	require.NoError(t, bundler.BundleSSREntries(root, result.SSREntries))
 
 	// Step 3: Build CSS via PostCSS (same approach as dev.go's buildCSSWithPostCSS).
 	outFile := filepath.Join("rstf", "static", "main.css")

@@ -58,3 +58,52 @@ func BundleEntries(projectRoot string, entries map[string]string) error {
 
 	return nil
 }
+
+// BundleSSREntries bundles all SSR entry files into route-scoped JS bundles for
+// the embedded renderer. Each entry produces rstf/ssr/{name}.js.
+func BundleSSREntries(projectRoot string, entries map[string]string) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	absRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		return fmt.Errorf("resolving project root: %w", err)
+	}
+
+	var entryPoints []api.EntryPoint
+	for _, entryPath := range entries {
+		base := filepath.Base(entryPath)
+		name := strings.TrimSuffix(base, ".ssr.tsx")
+		entryPoints = append(entryPoints, api.EntryPoint{
+			InputPath:  entryPath,
+			OutputPath: name,
+		})
+	}
+
+	result := api.Build(api.BuildOptions{
+		EntryPointsAdvanced: entryPoints,
+		Bundle:              true,
+		Outdir:              filepath.Join(absRoot, "rstf", "ssr"),
+		Platform:            api.PlatformBrowser,
+		Format:              api.FormatIIFE,
+		Target:              api.ES2022,
+		JSX:                 api.JSXAutomatic,
+		AbsWorkingDir:       absRoot,
+		Write:               true,
+	})
+
+	if len(result.Errors) > 0 {
+		var msgs []string
+		for _, msg := range result.Errors {
+			text := msg.Text
+			if msg.Location != nil {
+				text = fmt.Sprintf("%s:%d:%d: %s", msg.Location.File, msg.Location.Line, msg.Location.Column, msg.Text)
+			}
+			msgs = append(msgs, text)
+		}
+		return fmt.Errorf("esbuild errors:\n%s", strings.Join(msgs, "\n"))
+	}
+
+	return nil
+}

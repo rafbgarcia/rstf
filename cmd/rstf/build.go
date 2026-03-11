@@ -46,6 +46,13 @@ func runBuild() error {
 	}
 	fmt.Println("done")
 
+	fmt.Print("  SSR bundles ..... ")
+	if err := buildSSRBundles(result); err != nil {
+		fmt.Println("FAILED")
+		return fmt.Errorf("SSR bundling error: %w", err)
+	}
+	fmt.Println("done")
+
 	if _, err := os.Stat("main.css"); err == nil {
 		fmt.Print("  CSS ............. ")
 		if err := buildCSS(); err != nil {
@@ -64,17 +71,9 @@ func runBuild() error {
 	}
 
 	fmt.Print("  Dist layout ..... ")
-	if err := copyProjectToDist(".", distDir); err != nil {
-		fmt.Println("FAILED")
-		return err
-	}
 	if err := copyDir("rstf", filepath.Join(distDir, "rstf")); err != nil {
 		fmt.Println("FAILED")
 		return fmt.Errorf("copying generated assets: %w", err)
-	}
-	if err := copyDir("node_modules", filepath.Join(distDir, "node_modules")); err != nil {
-		fmt.Println("FAILED")
-		return fmt.Errorf("copying node_modules: %w", err)
 	}
 	fmt.Println("done")
 

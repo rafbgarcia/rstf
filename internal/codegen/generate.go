@@ -17,7 +17,8 @@ import (
 // GenerateResult holds the output of a codegen run.
 type GenerateResult struct {
 	RouteCount int
-	Entries    map[string]string // routeDir -> absolute path to .entry.tsx
+	Entries    map[string]string // routeDir -> absolute path to hydration entry .tsx
+	SSREntries map[string]string // routeDir -> absolute path to SSR entry .tsx
 }
 
 // ChangeEvent describes a single file change for incremental codegen.
@@ -43,7 +44,8 @@ type Generator struct {
 	filesByDir map[string]RouteFile
 	deps       map[string][]string
 	cache      *fsCache
-	entries    map[string]string // routeDir -> absolute entry file path
+	entries    map[string]string // routeDir -> absolute hydration entry path
+	ssrEntries map[string]string // routeDir -> absolute SSR entry path
 
 	prevServerCode string
 }
@@ -72,6 +74,7 @@ func NewGenerator(projectRoot string) (*Generator, error) {
 		filesByDir: make(map[string]RouteFile),
 		deps:       make(map[string][]string),
 		entries:    make(map[string]string),
+		ssrEntries: make(map[string]string),
 		cache:      newFSCache(),
 	}, nil
 }
@@ -99,6 +102,7 @@ func (g *Generator) Generate() (GenerateResult, error) {
 		filepath.Join(g.rstfDir, "types"),
 		filepath.Join(g.rstfDir, "generated"),
 		filepath.Join(g.rstfDir, "entries"),
+		filepath.Join(g.rstfDir, "ssr_entries"),
 		filepath.Join(g.rstfDir, "routes"),
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -198,6 +202,7 @@ func (g *Generator) Generate() (GenerateResult, error) {
 	// --- Phase 3: parallel hydration entries (needs deps from Phase 2) ---
 
 	entries := map[string]string{}
+	ssrEntries := map[string]string{}
 	for routeDir, routeDeps := range deps {
 		if !conventions.IsRouteDir(routeDir) {
 			continue
@@ -214,8 +219,15 @@ func (g *Generator) Generate() (GenerateResult, error) {
 				setErr(fmt.Errorf("writing entry %s: %w", entryPath, err))
 				return
 			}
+			ssrContent := GenerateSSREntry(routeDir)
+			ssrEntryPath := filepath.Join(g.rstfDir, "ssr_entries", ssrEntryFileName(routeDir))
+			if err := os.WriteFile(ssrEntryPath, []byte(ssrContent), 0644); err != nil {
+				setErr(fmt.Errorf("writing SSR entry %s: %w", ssrEntryPath, err))
+				return
+			}
 			mu.Lock()
 			entries[routeDir] = entryPath
+			ssrEntries[routeDir] = ssrEntryPath
 			mu.Unlock()
 		}(routeDir, routeDeps)
 	}
@@ -253,11 +265,13 @@ func (g *Generator) Generate() (GenerateResult, error) {
 	}
 	g.deps = deps
 	g.entries = entries
+	g.ssrEntries = ssrEntries
 	g.prevServerCode = serverCode
 
 	return GenerateResult{
 		RouteCount: countRoutes(files, deps),
 		Entries:    entries,
+		SSREntries: ssrEntries,
 	}, nil
 }
 
@@ -380,6 +394,7 @@ func (g *Generator) Regenerate(events []ChangeEvent) (RegenerateResult, error) {
 
 	// 7. Diff old vs new deps → only write hydration entries that changed.
 	newEntries := make(map[string]string, len(g.entries))
+	newSSREntries := make(map[string]string, len(g.ssrEntries))
 	for routeDir, routeDeps := range newDeps {
 		if !conventions.IsRouteDir(routeDir) {
 			continue
@@ -391,9 +406,16 @@ func (g *Generator) Regenerate(events []ChangeEvent) (RegenerateResult, error) {
 			if err := os.WriteFile(entryPath, []byte(entryContent), 0644); err != nil {
 				return RegenerateResult{}, fmt.Errorf("writing entry %s: %w", entryPath, err)
 			}
+			ssrContent := GenerateSSREntry(routeDir)
+			ssrEntryPath := filepath.Join(g.rstfDir, "ssr_entries", ssrEntryFileName(routeDir))
+			if err := os.WriteFile(ssrEntryPath, []byte(ssrContent), 0644); err != nil {
+				return RegenerateResult{}, fmt.Errorf("writing SSR entry %s: %w", ssrEntryPath, err)
+			}
 			newEntries[routeDir] = entryPath
+			newSSREntries[routeDir] = ssrEntryPath
 		} else {
 			newEntries[routeDir] = g.entries[routeDir]
+			newSSREntries[routeDir] = g.ssrEntries[routeDir]
 		}
 	}
 
@@ -418,12 +440,14 @@ func (g *Generator) Regenerate(events []ChangeEvent) (RegenerateResult, error) {
 	// 9. Update cached state.
 	g.deps = newDeps
 	g.entries = newEntries
+	g.ssrEntries = newSSREntries
 	g.prevServerCode = serverCode
 
 	return RegenerateResult{
 		GenerateResult: GenerateResult{
 			RouteCount: countRoutes(g.files, newDeps),
 			Entries:    newEntries,
+			SSREntries: newSSREntries,
 		},
 		ServerChanged: serverChanged,
 	}, nil
@@ -623,17 +647,10 @@ func ensureDeps(projectRoot, modulePath string) error {
 		return nil
 	}
 
-	// Local replace of the framework module means deps are resolved from disk,
-	// so network resolution is unnecessary (and can fail in offline CI/tests).
-	if goModContent, err := os.ReadFile(filepath.Join(projectRoot, "go.mod")); err == nil {
-		if strings.Contains(string(goModContent), "replace "+frameworkModule+" =>") {
-			return nil
-		}
-	}
-
-	// Framework module already in go.sum — deps are resolved.
+	// Required runtime deps already in go.sum — deps are resolved.
 	if sumContent, err := os.ReadFile(filepath.Join(projectRoot, "go.sum")); err == nil {
-		if strings.Contains(string(sumContent), frameworkModule+" ") {
+		sumStr := string(sumContent)
+		if strings.Contains(sumStr, frameworkModule+" ") && strings.Contains(sumStr, "rogchap.com/v8go ") {
 			return nil
 		}
 	}
@@ -641,6 +658,7 @@ func ensureDeps(projectRoot, modulePath string) error {
 	cmd := exec.Command("go", "get",
 		frameworkModule+"/renderer",
 		frameworkModule+"/router",
+		"rogchap.com/v8go",
 	)
 	cmd.Dir = projectRoot
 	if out, err := cmd.CombinedOutput(); err != nil {

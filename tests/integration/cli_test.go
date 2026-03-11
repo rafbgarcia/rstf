@@ -127,9 +127,8 @@ func TestCLIBuildProducesRunnableDist(t *testing.T) {
 	for _, path := range []string{
 		"sunroom",
 		"rstf/generated/routes.ts",
+		"rstf/ssr/index.js",
 		"rstf/static/main.css",
-		"routes/live-chat._id/index.tsx",
-		"node_modules/tsx/dist/loader.mjs",
 	} {
 		_, err := os.Stat(filepath.Join(distDir, path))
 		require.NoErrorf(t, err, "expected dist asset %s to exist", path)
