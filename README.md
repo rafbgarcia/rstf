@@ -28,7 +28,7 @@ npm run dev
 
 `bunx create-rstf@latest my-app` also works, and scaffolded apps run through `bun run dev` / `bun run build` because they use local package scripts.
 
-During `npm install`, the app-local `@rstf/cli` package downloads the matching `rstf` binary for macOS or Linux.
+During `npm install`, the app-local `@rstf/cli` package downloads the matching `rstf` binary for macOS or Linux and verifies it against the release SHA-256 checksums published on GitHub Releases.
 
 The generated app includes:
 

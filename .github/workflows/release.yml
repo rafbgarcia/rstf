@@ -23,6 +23,8 @@ jobs:
           test "${GITHUB_REF_NAME#v}" = "$(go run ./cmd/rstf version)"
           test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./packages/cli/package.json').version")"
           test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./packages/create-rstf/package.json').version")"
+      - name: Test CLI installer
+        run: node --test packages/cli/scripts/install.test.js
       - name: Test
         run: go test ./...
 
@@ -66,13 +68,31 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+      - name: Generate release checksums
+        run: |
+          find dist -mindepth 2 -type f -name 'rstf-*' -exec cp {} dist/ \;
+          cd dist
+          sha256sum rstf-* > rstf-checksums.txt
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign release checksums
+        run: |
+          cosign sign-blob \
+            --yes \
+            --output-signature dist/rstf-checksums.txt.sig \
+            --output-certificate dist/rstf-checksums.txt.pem \
+            dist/rstf-checksums.txt
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/**/rstf-*
+          files: |
+            dist/rstf-*
+            dist/rstf-checksums.txt
+            dist/rstf-checksums.txt.sig
+            dist/rstf-checksums.txt.pem
 
   publish-npm:
     needs:
