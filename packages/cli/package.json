@@ -2,18 +2,32 @@
   "name": "@rstf/cli",
   "version": "0.1.0-alpha.3",
   "description": "Project-local rstf CLI",
+  "homepage": "https://github.com/rafbgarcia/rstf#readme",
+  "bugs": {
+    "url": "https://github.com/rafbgarcia/rstf/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafbgarcia/rstf.git"
+  },
+  "license": "ISC",
+  "author": "Rafael Garcia",
+  "type": "commonjs",
   "bin": {
     "rstf": "bin/rstf.js"
+  },
+  "files": [
+    "bin",
+    "scripts/install.js"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "postinstall": "node ./scripts/install.js"
   },
-  "files": [
-    "bin",
-    "scripts"
-  ],
   "engines": {
-    "node": ">=24"
+    "node": ">=22"
   },
   "os": [
     "darwin",
