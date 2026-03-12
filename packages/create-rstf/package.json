@@ -1,6 +1,6 @@
 {
   "name": "create-rstf",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "description": "Create a new rstf app",
   "bin": {
     "create-rstf": "bin/create-rstf.js"
@@ -12,6 +12,6 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@rstf/cli": "0.1.0-alpha.3"
+    "@rstf/cli": "0.1.0-alpha.4"
   }
 }
