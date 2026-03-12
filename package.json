@@ -1,6 +1,9 @@
 {
   "name": "rstf-runtime",
   "private": true,
+  "scripts": {
+    "release:tag": "node ./scripts/release-tag.cjs"
+  },
   "devDependencies": {
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
