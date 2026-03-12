@@ -3,7 +3,7 @@
   "version": "0.1.0-alpha.3",
   "description": "Create a new rstf app",
   "bin": {
-    "create-rstf": "./bin/create-rstf.js"
+    "create-rstf": "bin/create-rstf.js"
   },
   "files": [
     "bin"

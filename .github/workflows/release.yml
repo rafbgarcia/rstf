@@ -38,6 +38,10 @@ jobs:
           [ "${expected}" = "${create_version}" ] || { echo "release check failed: tag version ${expected} does not match create-rstf version ${create_version}"; exit 1; }
       - name: Test CLI installer
         run: node --test packages/cli/scripts/install.test.js
+      - name: Check npm package manifests
+        run: |
+          (cd packages/cli && npm pack --dry-run)
+          (cd packages/create-rstf && npm pack --dry-run)
       - name: Test
         run: go test ./...
 
@@ -122,9 +126,18 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+      - name: Select npm dist-tag
+        id: npm_tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ "${version}" == *-* ]]; then
+            echo "value=alpha" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=latest" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish @rstf/cli
         working-directory: packages/cli
-        run: npm publish --access public
+        run: npm publish --access public --tag "${{ steps.npm_tag.outputs.value }}"
       - name: Publish create-rstf
         working-directory: packages/create-rstf
-        run: npm publish --access public
+        run: npm publish --access public --tag "${{ steps.npm_tag.outputs.value }}"

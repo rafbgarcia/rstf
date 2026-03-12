@@ -3,7 +3,7 @@
   "version": "0.1.0-alpha.3",
   "description": "Project-local rstf CLI",
   "bin": {
-    "rstf": "./bin/rstf.js"
+    "rstf": "bin/rstf.js"
   },
   "scripts": {
     "postinstall": "node ./scripts/install.js"
