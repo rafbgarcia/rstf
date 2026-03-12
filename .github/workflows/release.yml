@@ -85,12 +85,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: rstf-*
           path: dist
+          merge-multiple: true
       - name: Generate release checksums
         run: |
-          find dist -mindepth 2 -type f -name 'rstf-*' -exec cp {} dist/ \;
-          cd dist
-          sha256sum rstf-* > rstf-checksums.txt
+          find dist -maxdepth 1 -type f -name 'rstf-*' -print0 | sort -z | xargs -0 sha256sum > dist/rstf-checksums.txt
       - uses: sigstore/cosign-installer@v3
       - name: Sign release checksums
         run: |
