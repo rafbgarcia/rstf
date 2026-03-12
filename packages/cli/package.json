@@ -1,6 +1,6 @@
 {
   "name": "@rstf/cli",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.3",
   "description": "Project-local rstf CLI",
   "bin": {
     "rstf": "./bin/rstf.js"
@@ -25,7 +25,7 @@
   ],
   "rstf": {
     "goPackage": "github.com/rafbgarcia/rstf/cmd/rstf",
-    "goVersion": "v0.1.0-alpha.1",
+    "goVersion": "v0.1.0-alpha.3",
     "repo": "rafbgarcia/rstf"
   }
 }

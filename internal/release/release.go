@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	Version          = "0.1.0-alpha.1"
-	ModuleVersion    = "v0.1.0-alpha.1"
+	Version          = "0.1.0-alpha.3"
+	ModuleVersion    = "v0.1.0-alpha.3"
 	FrameworkModule  = "github.com/rafbgarcia/rstf"
 	CLIPackage       = "@rstf/cli"
 	CreatePackage    = "create-rstf"
