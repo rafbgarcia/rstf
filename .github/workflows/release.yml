@@ -19,10 +19,23 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - name: Verify release versions
         run: |
-          test "${GITHUB_REF_NAME}" = "$(node -p "require('./packages/cli/package.json').rstf.goVersion")"
-          test "${GITHUB_REF_NAME#v}" = "$(go run ./cmd/rstf version)"
-          test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./packages/cli/package.json').version")"
-          test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./packages/create-rstf/package.json').version")"
+          tag="${GITHUB_REF_NAME}"
+          expected="${tag#v}"
+          cli_go_version="$(node -p "require('./packages/cli/package.json').rstf.goVersion")"
+          cli_version="$(node -p "require('./packages/cli/package.json').version")"
+          create_version="$(node -p "require('./packages/create-rstf/package.json').version")"
+          go_cli_version="$(go run ./cmd/rstf version)"
+
+          echo "tag=${tag}"
+          echo "cli.rstf.goVersion=${cli_go_version}"
+          echo "cli.version=${cli_version}"
+          echo "create-rstf.version=${create_version}"
+          echo "go-cli.version=${go_cli_version}"
+
+          [ "${tag}" = "${cli_go_version}" ] || { echo "release check failed: tag ${tag} does not match packages/cli rstf.goVersion ${cli_go_version}"; exit 1; }
+          [ "${expected}" = "${go_cli_version}" ] || { echo "release check failed: tag version ${expected} does not match go CLI version ${go_cli_version}"; exit 1; }
+          [ "${expected}" = "${cli_version}" ] || { echo "release check failed: tag version ${expected} does not match packages/cli version ${cli_version}"; exit 1; }
+          [ "${expected}" = "${create_version}" ] || { echo "release check failed: tag version ${expected} does not match create-rstf version ${create_version}"; exit 1; }
       - name: Test CLI installer
         run: node --test packages/cli/scripts/install.test.js
       - name: Test
