@@ -102,7 +102,8 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/rstf-*
+            dist/rstf-darwin-*
+            dist/rstf-linux-*
             dist/rstf-checksums.txt
             dist/rstf-checksums.txt.sig
             dist/rstf-checksums.txt.pem
