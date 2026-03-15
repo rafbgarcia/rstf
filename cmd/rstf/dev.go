@@ -11,6 +11,7 @@ import (
 
 	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/rafbgarcia/rstf/internal/codegen"
+	"github.com/rafbgarcia/rstf/internal/gotool"
 	"github.com/rafbgarcia/rstf/internal/watcher"
 	"github.com/spf13/cobra"
 )
@@ -205,6 +206,7 @@ func handleCssChange() {
 // both `go run` and the child binary it spawns.
 func startServer(port string) *exec.Cmd {
 	cmd := exec.Command("go", "run", "./rstf/server_gen.go", "--port", port)
+	gotool.Prepare(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

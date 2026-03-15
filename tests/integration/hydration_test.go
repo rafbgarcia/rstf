@@ -17,6 +17,7 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/rafbgarcia/rstf/internal/codegen"
+	"github.com/rafbgarcia/rstf/internal/gotool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,6 +54,7 @@ func TestHydration(t *testing.T) {
 	// Step 4: Build the generated server first to catch compilation errors.
 	build := exec.Command("go", "build", "-o", filepath.Join(root, "rstf", "server"), "./rstf/server_gen.go")
 	build.Dir = root
+	gotool.Prepare(build)
 	if out, err := build.CombinedOutput(); err != nil {
 		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
 	}
@@ -119,6 +121,7 @@ func TestLiveQueryUpdatesAcrossClients(t *testing.T) {
 	port := freePort(t)
 	build := exec.Command("go", "build", "-o", filepath.Join(root, "rstf", "server"), "./rstf/server_gen.go")
 	build.Dir = root
+	gotool.Prepare(build)
 	if out, err := build.CombinedOutput(); err != nil {
 		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
 	}
@@ -244,6 +247,7 @@ writeFileSync(resolve("` + outFile + `"), result.css);
 	port := freePort(t)
 	build := exec.Command("go", "build", "-o", filepath.Join(root, "rstf", "server"), "./rstf/server_gen.go")
 	build.Dir = root
+	gotool.Prepare(build)
 	if out, err := build.CombinedOutput(); err != nil {
 		require.FailNowf(t, "compiling server", "compiling server: %v\n%s", err, out)
 	}

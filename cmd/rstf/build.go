@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/rafbgarcia/rstf/internal/codegen"
+	"github.com/rafbgarcia/rstf/internal/gotool"
 	"github.com/spf13/cobra"
 )
 
@@ -80,6 +81,7 @@ func runBuild() error {
 	fmt.Print("  Go binary ....... ")
 	outputPath := filepath.Join(distDir, appName)
 	build := exec.Command("go", "build", "-o", outputPath, "./rstf/server_gen.go")
+	gotool.Prepare(build)
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {

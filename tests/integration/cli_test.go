@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rafbgarcia/rstf/internal/gotool"
 	"github.com/rafbgarcia/rstf/internal/release"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,6 +44,7 @@ func rstfBinary(t *testing.T) string {
 		outputPath := filepath.Join(tmpDir, "rstf")
 		cmd := exec.Command("go", "build", "-o", outputPath, "./cmd/rstf")
 		cmd.Dir = repoRoot(t)
+		gotool.Prepare(cmd)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			cliBinaryErr = assert.AnError
@@ -123,6 +125,7 @@ func TestCLIBuildProducesRunnableDist(t *testing.T) {
 
 	goModTidy := exec.Command("go", "mod", "tidy")
 	goModTidy.Dir = appDir
+	gotool.Prepare(goModTidy)
 	goModTidy.Stdout = os.Stdout
 	goModTidy.Stderr = os.Stderr
 	require.NoError(t, goModTidy.Run())

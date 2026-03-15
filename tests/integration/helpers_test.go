@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rafbgarcia/rstf/internal/gotool"
 	"github.com/stretchr/testify/require"
 )
 
@@ -140,6 +141,7 @@ func installTestProjectDependencies(dir string) error {
 func tidyGoModule(dir string) error {
 	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = dir
+	gotool.Prepare(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

@@ -18,6 +18,7 @@ import (
 
 	"github.com/rafbgarcia/rstf/internal/bundler"
 	"github.com/rafbgarcia/rstf/internal/codegen"
+	"github.com/rafbgarcia/rstf/internal/gotool"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,6 +59,7 @@ func ensureRouteContractServerRunning(t *testing.T) string {
 
 		build := exec.Command("go", "build", "-o", filepath.Join(root, "rstf", "server"), "./rstf/server_gen.go")
 		build.Dir = root
+		gotool.Prepare(build)
 		out, err := build.CombinedOutput()
 		if err != nil {
 			routeServerErr = fmt.Errorf("compiling server: %w\n%s", err, out)
@@ -223,6 +225,7 @@ func installTestProjectDependencies(dir string) error {
 func tidyGoModule(dir string) error {
 	cmd := exec.Command("go", "mod", "tidy")
 	cmd.Dir = dir
+	gotool.Prepare(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
