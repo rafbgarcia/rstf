@@ -1,6 +1,6 @@
 {
   "name": "create-rstf",
-  "version": "0.1.0-alpha.6",
+  "version": "0.1.0-alpha.7",
   "description": "Create a new rstf app",
   "repository": {
     "type": "git",
@@ -17,6 +17,6 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@rstf/cli": "0.1.0-alpha.6"
+    "@rstf/cli": "0.1.0-alpha.7"
   }
 }
