@@ -55,6 +55,10 @@ function sha256Hex(data) {
   return createHash("sha256").update(data).digest("hex");
 }
 
+function normalizeChecksumAssetPath(assetPath) {
+  return path.posix.basename(assetPath.replaceAll("\\", "/"));
+}
+
 function parseChecksums(contents) {
   const checksums = new Map();
   for (const line of contents.split(/\r?\n/)) {
@@ -66,7 +70,7 @@ function parseChecksums(contents) {
     if (!match) {
       throw new Error(`invalid checksum line: ${trimmed}`);
     }
-    checksums.set(match[2], match[1].toLowerCase());
+    checksums.set(normalizeChecksumAssetPath(match[2]), match[1].toLowerCase());
   }
   return checksums;
 }
@@ -145,6 +149,7 @@ module.exports = {
   currentPackage,
   installBinary,
   normalizeTarget,
+  normalizeChecksumAssetPath,
   parseChecksums,
   releaseBaseURL,
   sha256Hex,

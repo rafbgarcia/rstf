@@ -94,7 +94,8 @@ jobs:
           merge-multiple: true
       - name: Generate release checksums
         run: |
-          find dist -maxdepth 1 -type f -name 'rstf-*' -print0 | sort -z | xargs -0 sha256sum > dist/rstf-checksums.txt
+          cd dist
+          find . -maxdepth 1 -type f -name 'rstf-*' | sed 's#^\./##' | sort | xargs sha256sum > rstf-checksums.txt
       - uses: sigstore/cosign-installer@v3
       - name: Sign release checksums
         run: |
