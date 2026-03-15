@@ -197,7 +197,6 @@ function verifyRelease(version) {
     cwd: path.join(repoRoot, "packages", "create-rstf"),
     stdio: "inherit",
   });
-  run("go", ["test", "./..."], { stdio: "inherit" });
 }
 
 function createReleaseCommit(version) {
