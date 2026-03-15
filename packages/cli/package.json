@@ -1,6 +1,6 @@
 {
   "name": "@rstf/cli",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "description": "Project-local rstf CLI",
   "homepage": "https://github.com/rafbgarcia/rstf#readme",
   "bugs": {
@@ -39,7 +39,7 @@
   ],
   "rstf": {
     "goPackage": "github.com/rafbgarcia/rstf/cmd/rstf",
-    "goVersion": "v0.1.0-alpha.5",
+    "goVersion": "v0.1.0-alpha.6",
     "repo": "rafbgarcia/rstf"
   }
 }
